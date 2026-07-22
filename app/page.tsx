@@ -5,9 +5,11 @@ import Link from 'next/link';
 import {
   AlertTriangle, Boxes, CheckCircle2, ChevronRight, CircleDollarSign, Clock3,
   Film, Folder, Gauge, Image as ImageIcon, MapPin, Pause, Play, ShieldCheck,
-  Sparkles, Square, WandSparkles, Wrench, XCircle, Zap,
+  Sparkles, Square, WandSparkles, Wrench, XCircle,
 } from 'lucide-react';
 import styles from './control-room.module.css';
+import { LIFECYCLE_STAGES } from '@/apps/web/config/lifecycle-navigation';
+import { ControlRoomLifecycleStrip } from '@/apps/web/features/lifecycle/ControlRoomLifecycleStrip';
 
 interface DashboardData {
   generatedAt: string;
@@ -27,24 +29,14 @@ interface DashboardData {
 }
 
 const TERMINAL = new Set(['COMPLETED', 'FAILED', 'CANCELLED', 'HUMAN_EXCEPTION_REQUIRED']);
-const LIFECYCLE = [
-  { label: 'Discover & Interpret', stages: ['DISCOVER', 'INTERPRET', 'DECOMPOSE'] },
-  { label: 'Research & Requirements', stages: ['RESEARCH', 'VERIFY_CONTEXT', 'BUILD_REQUIREMENTS'] },
-  { label: 'Scene & Cinematography', stages: ['BUILD_SCENE_GRAPH', 'RESOLVE_CONFLICTS', 'PLAN_CINEMATOGRAPHY', 'RETRIEVE_REFERENCES', 'VALIDATE_REFERENCES'] },
-  { label: 'Prompt & Model Plan', stages: ['PLAN_WORKFLOW', 'COMPILE_PROMPT', 'SELECT_MODEL', 'RUN_PREFLIGHT', 'QUEUE'] },
-  { label: 'Generate & Validate', stages: ['GENERATE_CANDIDATES', 'VALIDATE_FILES', 'REMOVE_DUPLICATES'] },
-  { label: 'Evaluate & Repair', stages: ['SCORE_CANDIDATES', 'DIAGNOSE_DEFECTS', 'REPAIR_OR_REGENERATE', 'VERIFY_IDENTITY', 'VERIFY_CONTINUITY', 'VERIFY_GEOGRAPHY', 'VERIFY_HISTORY', 'UPSCALE', 'POST_PROCESS', 'FINAL_QA'] },
-  { label: 'Approve & Deliver', stages: ['APPROVE', 'VERSION', 'DELIVER'] },
-  { label: 'Learn', stages: ['LEARN'] },
-];
 
 const tools = [
   ['Image Workspace', '/visuals/image-generator', ImageIcon],
-  ['Generation Queue', '/visuals/image-generator', Boxes],
-  ['Candidate Comparison', '/visuals/image-generator', Sparkles],
-  ['Quality Evidence', '/qa', ShieldCheck],
-  ['Repair History', '/qa', Wrench],
-  ['Approved Assets', '/library/assets', CheckCircle2],
+  ['Generation Queue', '/visuals/generation/queue', Boxes],
+  ['Storyboard Workspace', '/storyboard/storyboard-editor', Sparkles],
+  ['Quality Evidence', '/visuals/quality/evidence', ShieldCheck],
+  ['Exception Resolution', '/visuals/quality/exceptions', Wrench],
+  ['Approved Assets', '/visuals/delivery/approved-assets', CheckCircle2],
 ] as const;
 
 const displayStage = (value: string) => value.replace('PROCESSING:', '').replaceAll('_', ' ').toLowerCase().replace(/\b\w/g, (letter) => letter.toUpperCase());
@@ -72,7 +64,14 @@ export default function ControlRoomLandingPage() {
   }, [refresh]);
 
   const activeJob = useMemo(() => data?.recentJobs.find((job) => !TERMINAL.has(job.status)), [data]);
-  const activeGroup = activeJob ? Math.max(0, LIFECYCLE.findIndex((group) => group.stages.includes(activeJob.status.replace('PROCESSING:', '')))) : -1;
+  const activeGroup = activeJob
+    ? Math.max(
+        0,
+        LIFECYCLE_STAGES.findIndex((group) =>
+          group.workflowStatuses.includes(activeJob.status.replace('PROCESSING:', '')),
+        ),
+      )
+    : -1;
   const controlState = data?.system.controlState ?? 'UNAVAILABLE';
 
   async function changeControl(action: 'start' | 'pause' | 'resume' | 'stop' | 'emergency_stop') {
@@ -133,20 +132,14 @@ export default function ControlRoomLandingPage() {
             <span>Scene</span><b>{activeJob?.sceneId ?? '—'}</b><span>Workflow</span><b>{activeJob ? displayStage(activeJob.status) : '—'}</b>
             <span>Shot</span><b>—</b><span>Last Updated</span><b>{activeJob ? relativeTime(activeJob.updatedAt) : '—'}</b>
           </div>
-          <div className={styles.waiting}><strong>{activeJob ? displayStage(activeJob.status) : 'Waiting for production'}</strong><div><i style={{ width: `${activeGroup < 0 ? 0 : ((activeGroup + 1) / LIFECYCLE.length) * 100}%` }}/></div></div>
+          <div className={styles.waiting}><strong>{activeJob ? displayStage(activeJob.status) : 'Waiting for production'}</strong><div><i style={{ width: `${activeGroup < 0 ? 0 : ((activeGroup + 1) / LIFECYCLE_STAGES.length) * 100}%` }}/></div></div>
         </div>
       </div>
     </section>
 
     <div className={styles.lowerGrid}>
       <div className={styles.leftColumn}>
-        <section className={`${styles.panel} ${styles.lifecycle}`}>
-          <div className={styles.sectionHead}><h2><Zap size={19}/> Autonomous Production Lifecycle</h2><Link href="/visuals/image-generator">View full 33-stage workflow ↗</Link></div>
-          <div className={styles.steps}>{LIFECYCLE.map((group, index) => {
-            const count = group.stages.reduce((total, stage) => total + (data?.queue[stage] ?? 0) + (data?.queue[`PROCESSING:${stage}`] ?? 0), 0);
-            return <div className={`${styles.step} ${activeGroup === index ? styles.currentStep : ''}`} key={group.label}><i>{index + 1}</i><span>{group.label}</span><strong>{count}</strong><small>{count ? 'Active' : 'Idle'}</small></div>;
-          })}</div>
-        </section>
+        <ControlRoomLifecycleStrip queue={data?.queue} activeWorkflowIndex={activeGroup} />
 
         <div className={styles.dataGrid}>
           <section className={`${styles.panel} ${styles.activityPanel}`}>
@@ -154,7 +147,7 @@ export default function ControlRoomLandingPage() {
             <div className={styles.tableWrap}><table><thead><tr><th>Scene</th><th>Stage</th><th>Evidence</th><th>Provider / Model</th><th>Updated</th></tr></thead><tbody>
               {data?.recentJobs.slice(0, 3).map((job) => <tr key={job.id}><td><span>{job.sceneId ?? job.projectName}</span></td><td>{displayStage(job.status)}</td><td><em className={job.failureCode ? styles.exceptionEvidence : styles.normalEvidence}>{job.evidence}</em></td><td>{job.provider ?? 'Not selected'}</td><td>{new Date(job.updatedAt).toLocaleString()}</td></tr>)}
               {!data?.recentJobs.length && <tr><td colSpan={5} className={styles.emptyTable}>No production activity has been recorded.</td></tr>}
-            </tbody></table></div><Link className={styles.footerLink} href="/visuals/image-generator">View all activity →</Link>
+            </tbody></table></div><Link className={styles.footerLink} href="/visuals/generation/queue">View all activity →</Link>
           </section>
           <section className={`${styles.panel} ${styles.exceptions}`}>
             <h2><ShieldCheck size={19}/> Quality &amp; Exceptions</h2>
@@ -163,7 +156,7 @@ export default function ControlRoomLandingPage() {
             <ExceptionRow icon={XCircle} label="Rejected candidates" count={data?.quality.rejectedCandidates ?? 0} tone="red" />
             <ExceptionRow icon={CheckCircle2} label="Continuity violations" count={data?.quality.continuityViolations ?? 0} tone="purple" />
             <ExceptionRow icon={MapPin} label="Geographic failures" count={data?.quality.geographicFailures ?? 0} tone="purple" />
-            <Link className={styles.footerLink} href="/qa">Review exceptions →</Link>
+            <Link className={styles.footerLink} href="/visuals/quality/exceptions">Review exceptions →</Link>
           </section>
         </div>
       </div>

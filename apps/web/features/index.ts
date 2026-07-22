@@ -1,2 +1,3 @@
-// This file serves as an entry point for the CACSMS Web Features module
-export {};
+export { StoryboardEngineWorkspace } from './storyboard-engine';
+export { VideoAssemblyWorkspace } from './video-assembly';
+export { ImageGeneratorWorkspace } from './image-generator';

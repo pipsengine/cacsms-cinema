@@ -13,6 +13,6 @@ This project contains the cacsms-cinema workspace for autonomous visual intellig
 
 1. Install dependencies:
    `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
+2. Copy `.env.example` to `.env.local`. With a placeholder `GEMINI_API_KEY`, `PROVIDER_MODE=auto` uses local-dev image/script/eval providers so the pipeline runs without Google credentials. Set a real Gemini key (length ≥ 20) when you want live Gemini generation.
 3. Run the app:
    `npm run dev`

@@ -8,22 +8,29 @@ const nextConfig: NextConfig = {
   typescript: {
     ignoreBuildErrors: false,
   },
-  // Allow access to remote image placeholder.
   images: {
     remotePatterns: [
       {
         protocol: 'https',
         hostname: 'picsum.photos',
         port: '',
-        pathname: '/**', // This allows any path under the hostname
+        pathname: '/**',
       },
     ],
+  },
+  async redirects() {
+    return [
+      { source: '/scripts', destination: '/visuals/discover/script-interpretation', permanent: false },
+      { source: '/qa', destination: '/visuals/quality/evidence', permanent: false },
+      { source: '/video', destination: '/visuals/delivery/video-readiness', permanent: false },
+      { source: '/library/assets', destination: '/visuals/delivery/approved-assets', permanent: false },
+      { source: '/storyboards', destination: '/storyboard/storyboard-editor', permanent: false },
+      { source: '/storyboards/:path*', destination: '/storyboard/storyboard-editor', permanent: false },
+    ];
   },
   output: 'standalone',
   transpilePackages: ['motion'],
   webpack: (config, {dev}) => {
-    // HMR is disabled in AI Studio via DISABLE_HMR env var.
-    // Do not modifyâfile watching is disabled to prevent flickering during agent edits.
     if (dev && process.env.DISABLE_HMR === 'true') {
       config.watchOptions = {
         ignored: /.*/,

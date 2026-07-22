@@ -1,6 +1,8 @@
 import { createHash } from 'crypto';
 import { GoogleGenAI } from '@google/genai';
 import { prisma } from './db';
+import { buildLocalScreenplay } from './providers/local-script-provider';
+import { getScriptProviderMeta, shouldUseLocalProviders } from './providers/resolve-providers';
 import { calculateSceneReadiness } from './script-metrics';
 
 interface GeneratedScene {
@@ -28,7 +30,7 @@ function requireText(value: unknown, field: string, maxLength = 20_000): string 
   return value.trim();
 }
 
-function parseScreenplay(raw: string): GeneratedScreenplay {
+export function parseScreenplay(raw: string): GeneratedScreenplay {
   let value: Record<string, unknown>;
   try { value = JSON.parse(raw) as Record<string, unknown>; } catch { throw new Error('SCRIPT_OUTPUT_INVALID: Provider response was not JSON.'); }
   if (!Array.isArray(value.scenes) || value.scenes.length < 1 || value.scenes.length > 50) throw new Error('SCRIPT_OUTPUT_INVALID: scenes must contain 1 to 50 items.');
@@ -53,23 +55,65 @@ function parseScreenplay(raw: string): GeneratedScreenplay {
   return { logline: requireText(value.logline, 'logline'), genre: requireText(value.genre, 'genre', 200), scenes, continuityIssues };
 }
 
+async function generateScreenplayContent(script: {
+  title: string;
+  logline: string | null;
+  genre: string | null;
+  targetDurationSec: number;
+  project: { name: string; description: string | null };
+  scenes: unknown;
+}): Promise<GeneratedScreenplay> {
+  if (shouldUseLocalProviders()) {
+    return buildLocalScreenplay({
+      title: script.title,
+      logline: script.logline,
+      genre: script.genre,
+      targetDurationSec: script.targetDurationSec,
+      projectName: script.project.name,
+      projectDescription: script.project.description,
+    });
+  }
+
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) throw new Error('PROVIDER_NOT_CONFIGURED: GEMINI_API_KEY is missing.');
+  const model = process.env.GEMINI_SCRIPT_MODEL || 'gemini-2.5-flash';
+  const input = JSON.stringify({
+    title: script.title,
+    logline: script.logline,
+    genre: script.genre,
+    targetDurationSec: script.targetDurationSec,
+    project: { name: script.project.name, description: script.project.description },
+    existingScenes: script.scenes,
+  });
+  const ai = new GoogleGenAI({ apiKey });
+  const response = await ai.models.generateContent({
+    model,
+    contents: [{ role: 'user', parts: [{ text: `Create a production-ready screenplay structure from this persisted brief. Return JSON only with logline, genre, scenes, and continuityIssues. Every scene must include title, purpose, narrativeBeat, narration, visualIntention, locationPeriod, emotionalDirection, cameraDirection, soundDirection, and integer durationSec. Preserve supplied facts, do not invent citations, make total duration close to target, and list uncertainty or continuity problems instead of hiding them.\nINPUT:\n${input}` }] }],
+    config: { responseMimeType: 'application/json', temperature: 0.25 },
+  });
+  if (!response.text) throw new Error('SCRIPT_PROVIDER_EMPTY_RESPONSE');
+  return parseScreenplay(response.text);
+}
+
 export async function runAutonomousScriptGeneration(scriptId: string, correlationId: string) {
   const script = await prisma.script.findUnique({ where: { id: scriptId }, include: { project: true, scenes: { orderBy: { position: 'asc' }, include: { evidence: true } }, continuityIssues: true } });
   if (!script || script.deletedAt) throw new Error('SCRIPT_NOT_FOUND');
-  const apiKey = process.env.GEMINI_API_KEY;
-  const model = process.env.GEMINI_SCRIPT_MODEL || 'gemini-2.5-flash';
+  const providerMeta = getScriptProviderMeta();
   const input = JSON.stringify({ title: script.title, logline: script.logline, genre: script.genre, targetDurationSec: script.targetDurationSec, project: { name: script.project.name, description: script.project.description }, existingScenes: script.scenes });
-  const run = await prisma.scriptAutomationRun.create({ data: { scriptId, status: 'RUNNING', stage: 'GENERATE_AND_VALIDATE', providerId: 'google-gemini', modelId: model, inputHash: createHash('sha256').update(input).digest('hex'), correlationId, startedAt: new Date() } });
+  const run = await prisma.scriptAutomationRun.create({
+    data: {
+      scriptId,
+      status: 'RUNNING',
+      stage: 'GENERATE_AND_VALIDATE',
+      providerId: providerMeta.providerId,
+      modelId: providerMeta.modelId,
+      inputHash: createHash('sha256').update(input).digest('hex'),
+      correlationId,
+      startedAt: new Date(),
+    },
+  });
   try {
-    if (!apiKey || apiKey === 'MY_GEMINI_API_KEY') throw new Error('PROVIDER_NOT_CONFIGURED: GEMINI_API_KEY is missing.');
-    const ai = new GoogleGenAI({ apiKey });
-    const response = await ai.models.generateContent({
-      model,
-      contents: [{ role: 'user', parts: [{ text: `Create a production-ready screenplay structure from this persisted brief. Return JSON only with logline, genre, scenes, and continuityIssues. Every scene must include title, purpose, narrativeBeat, narration, visualIntention, locationPeriod, emotionalDirection, cameraDirection, soundDirection, and integer durationSec. Preserve supplied facts, do not invent citations, make total duration close to target, and list uncertainty or continuity problems instead of hiding them.\nINPUT:\n${input}` }] }],
-      config: { responseMimeType: 'application/json', temperature: 0.25 },
-    });
-    if (!response.text) throw new Error('SCRIPT_PROVIDER_EMPTY_RESPONSE');
-    const generated = parseScreenplay(response.text);
+    const generated = await generateScreenplayContent(script);
     const completedAt = new Date();
     const result = await prisma.$transaction(async (transaction) => {
       const nextVersion = script.version + 1;
@@ -86,10 +130,10 @@ export async function runAutonomousScriptGeneration(scriptId: string, correlatio
         await transaction.scriptContinuityIssue.create({ data: { scriptId, sceneId: scene?.id, code: issue.code, severity: issue.severity, description: issue.description, recommendedAction: issue.recommendedAction } });
       }
       await transaction.script.update({ where: { id: scriptId }, data: { logline: generated.logline, genre: generated.genre, version: nextVersion, status: 'DRAFT' } });
-      await transaction.scriptAutomationRun.update({ where: { id: run.id }, data: { status: 'COMPLETED', stage: 'COMPLETED', outputJson: JSON.stringify({ sceneCount: createdScenes.length, continuityIssueCount: generated.continuityIssues?.length || 0 }), completedAt } });
-      await transaction.auditEvent.create({ data: { actorType: 'SYSTEM', actorId: 'script-autonomy', action: 'SCRIPT_AUTONOMOUS_GENERATION_COMPLETED', entityType: 'Script', entityId: scriptId, afterJson: JSON.stringify({ version: nextVersion, scenes: createdScenes.length }), correlationId } });
-      await transaction.outboxEvent.create({ data: { aggregateType: 'Script', aggregateId: scriptId, eventType: 'ScriptGenerated', payloadJson: JSON.stringify({ scriptId, version: nextVersion, sceneCount: createdScenes.length }), correlationId } });
-      return { runId: run.id, scriptId, version: nextVersion, sceneCount: createdScenes.length };
+      await transaction.scriptAutomationRun.update({ where: { id: run.id }, data: { status: 'COMPLETED', stage: 'COMPLETED', outputJson: JSON.stringify({ sceneCount: createdScenes.length, continuityIssueCount: generated.continuityIssues?.length || 0, providerId: providerMeta.providerId }), completedAt } });
+      await transaction.auditEvent.create({ data: { actorType: 'SYSTEM', actorId: 'script-autonomy', action: 'SCRIPT_AUTONOMOUS_GENERATION_COMPLETED', entityType: 'Script', entityId: scriptId, afterJson: JSON.stringify({ version: nextVersion, scenes: createdScenes.length, providerId: providerMeta.providerId }), correlationId } });
+      await transaction.outboxEvent.create({ data: { aggregateType: 'Script', aggregateId: scriptId, eventType: 'ScriptGenerated', payloadJson: JSON.stringify({ scriptId, version: nextVersion, sceneCount: createdScenes.length, providerId: providerMeta.providerId }), correlationId } });
+      return { runId: run.id, scriptId, version: nextVersion, sceneCount: createdScenes.length, providerId: providerMeta.providerId };
     }, { timeout: 60_000 });
     return result;
   } catch (error) {

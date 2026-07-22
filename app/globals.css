@@ -1,1 +1,6 @@
 @import "tailwindcss";
+
+:root {
+  --sidebar-width: 372px;
+  --sidebar-collapsed: 76px;
+}

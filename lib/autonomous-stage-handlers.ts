@@ -4,8 +4,8 @@ import { prisma } from './db';
 import { generateValidatedCandidates } from './image-generation-service';
 import { JobOrchestrator } from './job-orchestrator';
 import { PROCESSABLE_JOB_STATUSES, type JobStatus } from './job-status';
-import { evaluateImageSemantics, type SemanticEvaluation } from './providers/google-gemini-evaluator';
-import { GoogleGeminiImageProvider } from './providers/google-gemini-image-provider';
+import type { SemanticEvaluation } from './providers/google-gemini-evaluator';
+import { evaluateImageSemanticsRouted, getImageProvider, shouldUseLocalProviders } from './providers/resolve-providers';
 import { localAssetStorage } from './storage/local-storage';
 
 let registered = false;
@@ -48,14 +48,15 @@ async function validateStoredCandidate(candidate: Candidate) {
 async function evaluateAndPersist(candidate: Candidate, source: string, prompt: string): Promise<SemanticEvaluation> {
   const bytes = await validateStoredCandidate(candidate);
   if (!candidate.mimeType) throw new Error(`CANDIDATE_MIME_MISSING: ${candidate.id}`);
-  const evaluation = await evaluateImageSemantics(bytes, candidate.mimeType, source, prompt);
+  const evaluation = await evaluateImageSemanticsRouted(bytes, candidate.mimeType, source, prompt);
   const hardPassed = evaluation.passed && evaluation.safetyPassed && evaluation.overall >= 0.75;
+  const local = shouldUseLocalProviders();
   await prisma.$transaction([
     prisma.qualityEvaluation.create({
       data: {
         candidateId: candidate.id,
-        evaluatorId: 'gemini-semantic-qa',
-        modelVersion: process.env.GEMINI_EVALUATOR_MODEL || 'gemini-2.5-flash',
+        evaluatorId: local ? 'local-dev-semantic-qa' : 'gemini-semantic-qa',
+        modelVersion: local ? 'local-heuristic' : (process.env.GEMINI_EVALUATOR_MODEL || 'gemini-2.5-flash'),
         score: evaluation.overall,
         confidence: evaluation.confidence,
         passed: hardPassed,
@@ -103,19 +104,27 @@ async function executeStage(jobId: string, stage: JobStatus, correlationId: stri
       return { mode: 'source-only', references: [], reason: 'No approved reference assets are attached to this job.' };
     case 'VALIDATE_REFERENCES':
       return { passed: true, validatedCount: 0, rule: 'No external reference may enter generation without provenance.' };
-    case 'PLAN_WORKFLOW':
-      return { provider: 'google-gemini', candidates: 1, repairLimit: job.maxAttempts, validation: ['signature', 'decode', 'dimensions', 'variance', 'read-back hash', 'semantic QA'] };
+    case 'PLAN_WORKFLOW': {
+      const provider = getImageProvider();
+      return { provider: provider.providerId, candidates: 1, repairLimit: job.maxAttempts, validation: ['signature', 'decode', 'dimensions', 'variance', 'read-back hash', 'semantic QA'] };
+    }
     case 'COMPILE_PROMPT': {
       const requirements = artifacts.get('BUILD_REQUIREMENTS');
       return { version: '1.0.0', prompt: `Create one professional 16:9 cinematic still. Scene: ${source}\nRequirements: ${JSON.stringify(requirements)}\nNo captions, logos, watermarks, UI elements, or invented writing. Maintain coherent identity, geography, history, anatomy, perspective, lighting, and spatial relationships.` };
     }
     case 'SELECT_MODEL': {
-      const provider = new GoogleGeminiImageProvider();
+      const provider = getImageProvider();
       provider.assertConfigured();
-      return { providerId: provider.providerId, modelId: provider.modelId, reason: 'Configured image-capable production adapter.' };
+      return {
+        providerId: provider.providerId,
+        modelId: provider.modelId,
+        reason: provider.providerId === 'local-dev'
+          ? 'Local-dev image adapter active because Gemini credentials are not configured.'
+          : 'Configured image-capable production adapter.',
+      };
     }
     case 'RUN_PREFLIGHT': {
-      const provider = new GoogleGeminiImageProvider();
+      const provider = getImageProvider();
       provider.assertConfigured();
       const key = `preflight/${job.id}-${correlationId}.probe`;
       const probe = Buffer.from(`cacsms:${correlationId}`);
@@ -123,7 +132,7 @@ async function executeStage(jobId: string, stage: JobStatus, correlationId: stri
       const readBack = await localAssetStorage.get(key);
       await localAssetStorage.delete(key);
       if (!readBack.equals(probe)) throw new Error('STORAGE_PREFLIGHT_FAILED');
-      return { providerConfigured: true, storageWriteReadDelete: true };
+      return { providerConfigured: true, providerId: provider.providerId, storageWriteReadDelete: true };
     }
     case 'QUEUE':
       return { queuedAt: new Date().toISOString(), priority: job.priority, budget: job.budget };

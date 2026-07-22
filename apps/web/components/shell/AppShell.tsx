@@ -1,20 +1,16 @@
 'use client';
 
-import React, { useState } from 'react';
-import { Sidebar } from './Sidebar';
-import { TopNav } from './TopNav';
+import React, { Suspense } from 'react';
+import { CacsmsSidebar } from '@/apps/web/components/navigation/CacsmsSidebar';
+import styles from './shell.module.css';
 
 export function AppShell({ children }: { children: React.ReactNode }) {
-  const [navigationOpen, setNavigationOpen] = useState(false);
   return (
-    <div className="flex h-screen overflow-hidden bg-[#f8fafc] font-sans text-[#101a35]">
-      <Sidebar open={navigationOpen} onClose={() => setNavigationOpen(false)} />
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        <TopNav onMenu={() => setNavigationOpen((value) => !value)} />
-        <main className="flex-1 relative z-0 overflow-y-auto focus:outline-none">
-          {children}
-        </main>
-      </div>
+    <div className={styles.shell}>
+      <Suspense fallback={<aside className={styles.sidebarFallback} aria-hidden />}>
+        <CacsmsSidebar />
+      </Suspense>
+      <main className={styles.content}>{children}</main>
     </div>
   );
 }

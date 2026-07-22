@@ -1,12 +1,12 @@
 import { createHash } from 'crypto';
 import { prisma } from './db';
 import { validateAndStoreImage, type ImageIntegrityResult } from './image-integrity';
-import { GoogleGeminiImageProvider } from './providers/google-gemini-image-provider';
 import type { GeneratedImage } from './providers/image-provider';
+import { getImageProvider } from './providers/resolve-providers';
 import { localAssetStorage } from './storage/local-storage';
 
 export async function generateValidatedCandidates(jobId: string, prompt: string, correlationId: string) {
-  const provider = new GoogleGeminiImageProvider();
+  const provider = getImageProvider();
   provider.assertConfigured();
   const startedAt = Date.now();
   const attempt = await prisma.generationAttempt.create({

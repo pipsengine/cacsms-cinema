@@ -1,0 +1,197 @@
+TASK: PROFESSIONAL FIGMA-STYLE PAGE REDESIGN AND FRONTEND IMPLEMENTATION
+
+Review the attached screenshot and redesign the page as a professional, modern, enterprise-grade CACSMS Autonomous Media Studio interface.
+
+Generate only the complete React/Next.js, HTML, and CSS/SCSS code required to reproduce the redesigned page. Do not generate a separate redesign image unless I explicitly request one.
+
+IMPLEMENTATION REQUIREMENTS
+
+1. Preserve the existing application shell, sidebar, navigation structure, sidebar width, branding, routes, and overall page layout. Do not redesign, remove, rename, reorder, or duplicate sidebar items.
+
+2. Redesign only the main content workspace of the attached page.
+
+3. Use the existing CACSMS technology stack:
+   - React
+   - Next.js App Router
+   - TypeScript/TSX
+   - HTML5
+   - CSS Modules, SCSS, or the project’s existing styling system
+   - Lucide React icons where appropriate
+
+4. Follow the existing folder structure:
+   - Pages: `apps/web/app`
+   - Feature components: `apps/web/features`
+   - Shared components: `apps/web/components`
+   - Global styles: `apps/web/app/globals.css`
+
+5. Maintain the exact route represented by the attached page. Do not create a replacement route unless technically necessary.
+
+DESIGN DIRECTION
+
+Create a clean, professional, future-ready enterprise interface with:
+
+- Predominantly white page background.
+- Light neutral borders and subtle shadows.
+- Restrained blue, indigo, teal, green, amber, and red status colours.
+- Clear typography and information hierarchy.
+- Consistent spacing, alignment, card radius, controls, and iconography.
+- Compact but readable enterprise density.
+- Strong visual separation between controls, workspace, monitoring, exceptions, and outputs.
+- Responsive desktop, tablet, and mobile layouts.
+- Accessible contrast, focus states, labels, buttons, tabs, tables, tooltips, drawers, modals, and empty states.
+- Skeleton loading, success, warning, error, paused, stopped, and unavailable states where relevant.
+- No overcrowding; use tabs, drawers, accordions, drill-down panels, and progressive disclosure.
+
+AUTONOMOUS OPERATION REQUIREMENTS
+
+Design the page as part of a genuinely autonomous media-production platform.
+
+Human interaction should ordinarily be limited to:
+
+- Start.
+- Pause.
+- Resume.
+- Stop.
+- Emergency Stop.
+- Reviewing exceptions that cannot be resolved safely.
+- Optional inspection or override where explicitly authorized.
+
+The system should visibly manage the page’s routine workflow automatically, including where applicable:
+
+- Input interpretation.
+- Research and evidence retrieval.
+- Planning.
+- Scene or task decomposition.
+- Provider, model, tool, and workflow selection.
+- Generation or processing.
+- Quality evaluation.
+- Continuity validation.
+- Geographic, cultural, and historical validation.
+- Defect detection.
+- Automated repair or regeneration.
+- Approval decisions.
+- Asset versioning.
+- Downstream handoff.
+- Monitoring and learning.
+
+Show autonomous controls only where relevant to this page. Do not add the controls mechanically if the page is merely a library, configuration, history, or detail screen.
+
+REALISTIC WORKSPACE DESIGN
+
+Replace capability-gated warnings, unfinished placeholders, blank white cards, and developer-facing messages with a professional operational workspace appropriate to the attached page.
+
+Determine the page’s actual purpose from its title, route, navigation position, and visible content. Design the required page-specific:
+
+- Header and breadcrumb.
+- Operational controls.
+- Summary cards.
+- Primary workspace.
+- Context panels.
+- Tabs.
+- Tables, cards, timelines, canvases, editors, or galleries.
+- Status indicators.
+- Quality evidence.
+- Exceptions and repair information.
+- History and version details.
+- Appropriate drill-down actions.
+
+Do not force the same dashboard arrangement onto every page. The layout must suit the page’s function.
+
+DATA PRESENTATION RULES
+
+- UI sample data may be used only to demonstrate the design.
+- Clearly structure sample data so it can later be replaced with API data.
+- Do not present sample data as a real backend result.
+- Do not simulate live generation, workflow execution, progress, health, cost, or quality evaluation.
+- Do not use random scores or timers.
+- Do not use hard-coded metrics as production truth.
+- Progress components must be designed to consume actual persisted workflow states during integration.
+- Use “No data”, “Not started”, “Awaiting execution”, or a proper empty state when no genuine data exists.
+- Never show a blank image card as a successful output.
+
+SCOPE LIMITS
+
+For this task, implement frontend presentation only.
+
+Do not implement or modify:
+
+- Backend services.
+- MSSQL schemas or migrations.
+- API endpoints.
+- Provider integrations.
+- Authentication or login/logout.
+- Infrastructure.
+- Background workers.
+- Sidebar architecture.
+- Repository-wide refactoring.
+- Unrelated pages.
+
+However, structure the frontend professionally so real APIs, persisted workflow states, providers, and event streams can be connected later without redesigning the page.
+
+CODE QUALITY
+
+- Use reusable, strongly typed React components.
+- Avoid a single oversized page component.
+- Separate page data, types, reusable UI sections, and styles.
+- Use semantic HTML.
+- Use stable keys.
+- Avoid inline styling except for genuinely dynamic values.
+- Avoid duplicated markup and CSS.
+- Do not use external image URLs that may expire.
+- Add helpful comments only where integration intent is not obvious.
+- Ensure the code builds without TypeScript or linting errors.
+- Preserve existing project conventions and dependencies.
+- Do not replace working shared components unnecessarily.
+
+RESPONSIVE BEHAVIOUR
+
+The design must work properly at:
+
+- Large desktop.
+- Standard laptop.
+- Tablet.
+- Mobile.
+
+On smaller screens:
+
+- Preserve important controls.
+- Collapse secondary panels intelligently.
+- Allow wide tables and timelines to scroll safely.
+- Convert multi-column workspaces into usable stacked layouts.
+- Do not hide critical status, errors, or Emergency Stop controls.
+- Prevent horizontal page overflow.
+
+EXPECTED DELIVERABLE
+
+Provide:
+
+1. The complete Next.js/React TypeScript code.
+2. All required reusable components.
+3. Complete HTML/JSX structure.
+4. Complete CSS Module/SCSS code.
+5. Types and structured sample data where required.
+6. Exact file paths for every file.
+7. Required dependency-installation commands, if any.
+8. Brief integration instructions.
+
+Do not provide:
+
+- A redesign image.
+- Backend implementation.
+- Database implementation.
+- Architecture audit.
+- Long explanations unrelated to the page.
+- Placeholder pseudocode.
+- An incomplete code fragment.
+
+The final result must be implementation-ready and closely reflect a professional Figma-designed enterprise product.
+
+PAGE TO IMPLEMENT
+
+Route: [INSERT PAGE ROUTE]
+
+Page name: [INSERT PAGE NAME]
+
+Special requirements: [INSERT ANY PAGE-SPECIFIC REQUIREMENTS]
+
+Use the attached screenshot as the current-state reference. Improve its usability, hierarchy, autonomy, responsiveness, and professional quality while preserving the established CACSMS application identity and sidebar.

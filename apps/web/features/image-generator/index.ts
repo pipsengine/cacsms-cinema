@@ -1,0 +1,1 @@
+export { ImageGeneratorWorkspace } from './ImageGeneratorWorkspace';

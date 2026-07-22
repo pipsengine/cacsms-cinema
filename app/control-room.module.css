@@ -2,3 +2,8 @@
 @media(max-width:1400px){.metrics{grid-template-columns:repeat(4,1fr)}.controlBar{flex-wrap:wrap}.controls{order:3;margin-left:0}.budget{margin-left:auto}.steps{grid-template-columns:repeat(4,1fr);row-gap:14px}.step:nth-child(4):after{display:none}}
 @media(max-width:900px){.content{padding:18px}.emptyProduction{grid-template-columns:1fr}.emptyArt{border-right:0;border-bottom:1px solid #e2e7ef;padding:18px}.lowerGrid,.dataGrid{grid-template-columns:1fr}.toolPanel{order:-1}.controlBar{gap:16px}.metrics{grid-template-columns:repeat(2,1fr)}}
 @media(max-width:580px){.content h1{font-size:23px}.metrics{grid-template-columns:1fr 1fr}.controls{width:100%;overflow-x:auto}.budget{margin-left:0}.emptyProduction{min-height:auto}.jobDetails{padding:20px 5px}.detailGrid{grid-template-columns:85px 1fr}.steps{grid-template-columns:repeat(2,1fr)}.step:nth-child(even):after{display:none}.sectionHead{align-items:flex-start;gap:10px}.sectionHead a{white-space:nowrap}}
+
+.stepButton{cursor:pointer;font:inherit;text-align:left;appearance:none;-webkit-appearance:none}
+.stepButton:focus-visible{outline:2px solid #633bff;outline-offset:3px}
+.selectedStep{box-shadow:0 0 0 2px #4c31de inset;background:#f7f5ff}
+.stepButton:hover{background:#f8f9fc}
