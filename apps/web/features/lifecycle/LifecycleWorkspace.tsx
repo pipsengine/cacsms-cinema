@@ -44,7 +44,7 @@ const LIVE_RENDERERS: Record<
   'generation-queue': () => <ImageGeneratorWorkspace focus="queue" />,
   'active-job': ({ jobId }) =>
     jobId ? (
-      <ImageGeneratorWorkspace initialJobId={jobId} focus="job" />
+      <ImageGeneratorWorkspace key={jobId} initialJobId={jobId} focus="job" />
     ) : (
       <ImageGeneratorWorkspace focus="queue" />
     ),

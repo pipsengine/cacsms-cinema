@@ -51,7 +51,12 @@ export default function ScriptWriterPage() {
     setDraft(nextScript?.scenes.find((scene) => scene.id === nextSceneId) || null);
   }, [sceneId, scriptId]);
 
-  useEffect(() => { void refresh().catch((caught) => setError(caught instanceof Error ? caught.message : 'Workspace unavailable.')); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      void refresh().catch((caught) => setError(caught instanceof Error ? caught.message : 'Workspace unavailable.'));
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [refresh]);
 
   const script = scripts.find((item) => item.id === scriptId) || null;
   const totalDuration = script?.scenes.reduce((sum, scene) => sum + scene.durationSec, 0) || 0;

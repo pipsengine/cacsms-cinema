@@ -139,19 +139,20 @@ export function CacsmsSidebar() {
   const activeMatch = useMemo(() => findActiveLifecyclePage(pathname), [pathname]);
   const routeStage = useMemo(() => findStageForPathname(pathname), [pathname]);
   const [expanded, setExpanded] = useState(routeStage?.id ?? '');
-  const [collapsed, setCollapsed] = useState(false);
+  const [pathnameForExpand, setPathnameForExpand] = useState(pathname);
+  const [collapsed, setCollapsed] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return localStorage.getItem('cacsms-sidebar-collapsed') === 'true';
+  });
   const [mobileOpen, setMobileOpen] = useState(false);
   const [workflowByStage, setWorkflowByStage] = useState<Record<string, WorkflowOperationalStatus>>({});
   const listIdPrefix = useId();
 
-  useEffect(() => {
+  if (pathname !== pathnameForExpand) {
+    setPathnameForExpand(pathname);
     if (routeStage) setExpanded(routeStage.id);
     setMobileOpen(false);
-  }, [pathname, routeStage]);
-
-  useEffect(() => {
-    setCollapsed(localStorage.getItem('cacsms-sidebar-collapsed') === 'true');
-  }, []);
+  }
 
   useEffect(() => {
     let cancelled = false;

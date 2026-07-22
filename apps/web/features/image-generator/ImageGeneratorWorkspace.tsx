@@ -87,10 +87,6 @@ export function ImageGeneratorWorkspace({
     };
   }, [refresh]);
 
-  useEffect(() => {
-    if (initialJobId) setSelectedJobId(initialJobId);
-  }, [initialJobId]);
-
   const selectedJob = useMemo(
     () => jobs.find((job) => job.id === selectedJobId) || null,
     [jobs, selectedJobId],
