@@ -1,0 +1,57 @@
+export const JOB_STATUSES = [
+  'DISCOVER',
+  'INTERPRET',
+  'DECOMPOSE',
+  'RESEARCH',
+  'VERIFY_CONTEXT',
+  'BUILD_REQUIREMENTS',
+  'BUILD_SCENE_GRAPH',
+  'RESOLVE_CONFLICTS',
+  'PLAN_CINEMATOGRAPHY',
+  'RETRIEVE_REFERENCES',
+  'VALIDATE_REFERENCES',
+  'PLAN_WORKFLOW',
+  'COMPILE_PROMPT',
+  'SELECT_MODEL',
+  'RUN_PREFLIGHT',
+  'QUEUE',
+  'GENERATE_CANDIDATES',
+  'VALIDATE_FILES',
+  'REMOVE_DUPLICATES',
+  'SCORE_CANDIDATES',
+  'DIAGNOSE_DEFECTS',
+  'REPAIR_OR_REGENERATE',
+  'VERIFY_IDENTITY',
+  'VERIFY_CONTINUITY',
+  'VERIFY_GEOGRAPHY',
+  'VERIFY_HISTORY',
+  'UPSCALE',
+  'POST_PROCESS',
+  'FINAL_QA',
+  'APPROVE',
+  'VERSION',
+  'DELIVER',
+  'LEARN',
+  'COMPLETED',
+  'FAILED',
+  'CANCELLED',
+  'HUMAN_EXCEPTION_REQUIRED',
+] as const;
+
+export type JobStatus = (typeof JOB_STATUSES)[number];
+
+const TERMINAL_STATUSES: JobStatus[] = [
+  'COMPLETED',
+  'FAILED',
+  'CANCELLED',
+  'HUMAN_EXCEPTION_REQUIRED',
+];
+
+export const PROCESSABLE_JOB_STATUSES = JOB_STATUSES.filter(
+  (status): status is Exclude<JobStatus, 'COMPLETED' | 'FAILED' | 'CANCELLED' | 'HUMAN_EXCEPTION_REQUIRED'> =>
+    !TERMINAL_STATUSES.includes(status)
+);
+
+export function isJobStatus(value: unknown): value is JobStatus {
+  return typeof value === 'string' && JOB_STATUSES.includes(value as JobStatus);
+}

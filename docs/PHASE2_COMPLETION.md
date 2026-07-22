@@ -1,44 +1,47 @@
-# Phase 2 Completion Report: Base Architecture & MSSQL Setup
+# Phase 2 Progress Report — MSSQL and Durable Foundations
 
-## 1. Implemented Requirements
-- Established base directory architecture mimicking the required `apps/` structure for CACSMS (`apps/api`, `apps/web`).
-- Created the main backend entry point (`apps/api/src/main.ts`) designed to run as a concurrent background worker in development via `concurrently`.
-- Initialized Prisma ORM with `sqlserver` provider for Microsoft SQL Server integration.
-- Drafted the foundational schema (`prisma/schema.prisma`) for durable job orchestration, candidate storage, and asset versioning.
-- Implemented the `protected-reset.ts` script to satisfy the "protected reset" requirements (`ALLOW_DEVELOPMENT_RESET=true` guard, manifest creation, and migration reset).
+Status: **IN PROGRESS — NOT COMPLETE**
 
-## 2. Files Created or Changed
-- **Created**: `/prisma/schema.prisma` - Initial MSSQL schema definitions for Jobs, Candidates, Assets.
-- **Created**: `/scripts/protected-reset.ts` - Destructive reset script with safety guards.
-- **Created**: `/apps/api/src/main.ts` - Background worker entry point.
-- **Created**: `/lib/db.ts` - Global singleton Prisma client.
-- **Created**: `/apps/web/features/index.ts`, `/apps/web/components/index.ts` - Structure scaffolding.
-- **Modified**: `/package.json` - Added `prisma`, `tsx`, `concurrently` dependencies. Added `dev`, `db:reset`, `db:push`, `db:generate` scripts.
-- **Modified**: `/.env.example` - Added MS SQL Server `DATABASE_URL` and `ALLOW_DEVELOPMENT_RESET` guard variable.
+The earlier completion claim was invalid because it described a five-table draft without migrations or tests. The master specification states that rendered or scaffolded code is not phase completion.
 
-## 3. Database Migrations
-- Prisma schema created but migrations must be pushed once a real SQL Server instance is connected (`npm run db:push` or `prisma migrate dev`).
+## Implemented in this remediation
 
-## 4. Tests Executed & Results
-- Development startup (`npm run dev`) runs Next.js and the background worker concurrently.
-- No direct database integration tests run yet pending the connection to a live MS SQL server.
+- Verified MSSQL connectivity and protected pre-migration snapshot.
+- Added and applied `20260722142000_foundation` as the migration-controlled baseline.
+- Added JobStageExecution, SystemControl, WorkerLease, IdempotencyRecord, AuditEvent, OutboxEvent, FileValidation, QualityEvaluation, ImageDefect, RepairAction, and immutable AssetVersion foundations.
+- Added indexes, unique constraints, job correlation/idempotency/lease/cancellation/version fields, and project/job soft-delete timestamps.
+- Expanded the persisted lifecycle vocabulary to every mandatory stage in section 6.
+- Replaced simulated stage success with a handler registry that fails explicitly to a human exception when a real production handler is absent.
+- Added a versioned, idempotent, correlated, audited, transactional system-control API.
+- Connected Start, Pause, Resume, Stop, and Emergency Stop UI controls to real MSSQL state.
+- Added initial lifecycle and strict-prohibition tests.
 
-## 5. Defects Found & Resolved
-- **Found**: The Next.js AI Studio environment expects a unified `/app` folder to be accessible without complex Nx or Turborepo monorepo setups. 
-- **Resolved**: Implemented logical folder separation by adding the `apps/web/` namespace for features and components while keeping the standard `/app` for routing, avoiding disrupting the platform build container's hard-coded assumptions while satisfying the functional architectural request.
+## Migration
 
-## 6. Known Limitations & Outstanding Work
-- Actual database migration execution requires a running MS SQL Server instance (connection string must be defined by the user in the AI Studio Secrets panel or `.env`).
-- Background worker currently contains a dummy polling loop, waiting for the implementation of the orchestration state-machine logic in Phase 4.
+- `prisma/migrations/20260722142000_foundation/migration.sql`
+- Applied successfully to `db_Cacsms-Contents` after the verified Phase 1 backup.
 
-## 7. Verification Evidence
-- Schema is syntactically valid Prisma format for `sqlserver`.
-- Reset script enforces the `ALLOW_DEVELOPMENT_RESET=true` flag.
-- Package.json scripts run the backend and frontend simultaneously via `concurrently "next dev" "tsx apps/api/src/main.ts"`.
+## API
 
-## 8. Testing the Phase
-1. Add `.env` file with `DATABASE_URL` pointing to an MS SQL database and `ALLOW_DEVELOPMENT_RESET="true"`.
-2. Run `npm run db:generate` to generate Prisma Client.
-3. Run `npm run db:push` to sync the schema to the MS SQL instance.
-4. Run `npm run dev` to boot both the Next.js frontend and the background worker log heartbeat.
-5. Run `npm run db:reset` to verify the protected destruction mechanism works safely.
+- `GET /api/v1/system/control`
+- `POST /api/v1/system/control`
+- Mutations require `Idempotency-Key`; correlation IDs, audit events, and outbox events are persisted transactionally.
+
+## Verification
+
+- `npm run db:reset -- --plan` — passed, no mutation.
+- Protected execute-mode empty-database snapshot/checksum — passed.
+- Prisma schema validation — passed.
+- Foundation migration — applied.
+- `npm test` — 3 passed, 0 failed.
+- `npx tsc --noEmit` — passed.
+- `npm run lint` — passed.
+
+## Outstanding before Phase 2 completion
+
+- Add the remaining section-21 entities for scripts/scenes, requirements/evidence, graphs, providers/models/workflows/prompts, identity/continuity/geography/history, costs, benchmarks, usages/renditions/lineage, and policies.
+- Add migration tests, rollback verification, and full database integrity checks.
+- Implement and test the outbox dispatcher and worker heartbeat/lease renewal.
+- Add structured logging and health checks for all new infrastructure.
+
+No later phase is represented as complete.

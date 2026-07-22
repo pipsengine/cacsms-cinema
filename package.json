@@ -3,12 +3,13 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "concurrently \"next dev\" \"tsx apps/api/src/main.ts\"",
+    "dev": "concurrently --kill-others-on-fail \"next dev -p 3002\" \"tsx --env-file=.env.local --env-file=.env.development.local apps/api/src/main.ts\"",
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
+    "test": "tsx --test tests/**/*.test.ts",
     "clean": "next clean",
-    "db:reset": "tsx scripts/protected-reset.ts",
+    "db:reset": "tsx --env-file=.env.local --env-file=.env.development.local scripts/protected-reset.ts",
     "db:push": "prisma db push",
     "db:generate": "prisma generate"
   },

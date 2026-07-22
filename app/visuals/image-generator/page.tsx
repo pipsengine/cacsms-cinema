@@ -1,177 +1,68 @@
-import React from 'react';
-import { 
-  Play, Pause, Square, AlertOctagon, 
-  Activity, Server, Image as ImageIcon,
-  CheckCircle2, AlertCircle, Clock, ChevronRight
-} from 'lucide-react';
+'use client';
+
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Activity, AlertOctagon, LoaderCircle, Pause, Play, Server, Square, TriangleAlert, Workflow } from 'lucide-react';
+import { JOB_STATUSES } from '@/lib/job-status';
+
+interface JobRecord { id: string; sceneId: string | null; status: string; priority: number; project: { name: string }; attempts: unknown[]; candidates: unknown[] }
+interface Control { desiredState: string; reason: string | null; version: number }
+
+const terminal = new Set(['COMPLETED', 'FAILED', 'CANCELLED', 'HUMAN_EXCEPTION_REQUIRED']);
 
 export default function ImageGeneratorWorkspace() {
+  const [jobs, setJobs] = useState<JobRecord[]>([]);
+  const [control, setControl] = useState<Control | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const refresh = useCallback(async () => {
+    try {
+      const [jobsResponse, controlResponse] = await Promise.all([fetch('/api/jobs', { cache: 'no-store' }), fetch('/api/v1/system/control', { cache: 'no-store' })]);
+      if (!jobsResponse.ok || !controlResponse.ok) throw new Error('Operational state could not be loaded.');
+      setJobs(await jobsResponse.json());
+      setControl(await controlResponse.json());
+      setError(null);
+    } catch (caught) { setError(caught instanceof Error ? caught.message : 'Operational state is unavailable.'); }
+  }, []);
+
+  useEffect(() => {
+    const initial = window.setTimeout(() => void refresh(), 0);
+    const interval = window.setInterval(() => void refresh(), 5000);
+    return () => { window.clearTimeout(initial); window.clearInterval(interval); };
+  }, [refresh]);
+
+  const activeJob = useMemo(() => jobs.find((job) => !terminal.has(job.status) && !job.status.startsWith('PROCESSING:')) ?? jobs.find((job) => job.status.startsWith('PROCESSING:')), [jobs]);
+  const activeStage = activeJob?.status.replace('PROCESSING:', '') ?? null;
+  const progress = activeStage ? Math.max(0, (JOB_STATUSES.indexOf(activeStage as never) / (JOB_STATUSES.length - 4)) * 100) : 0;
+
+  async function changeControl(action: 'start' | 'pause' | 'resume' | 'stop' | 'emergency_stop') {
+    setBusy(true);
+    try {
+      const response = await fetch('/api/v1/system/control', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Idempotency-Key': crypto.randomUUID(), 'X-Correlation-Id': crypto.randomUUID() },
+        body: JSON.stringify({ action, reason: action === 'emergency_stop' ? 'Operator emergency stop' : `Operator requested ${action}` }),
+      });
+      if (!response.ok) throw new Error((await response.json()).error?.message ?? 'Control request failed.');
+      await refresh();
+    } catch (caught) { setError(caught instanceof Error ? caught.message : 'Control request failed.'); }
+    finally { setBusy(false); }
+  }
+
+  if (!control && !error) return <div className="flex h-full items-center justify-center text-sm text-slate-500"><LoaderCircle className="mr-2 h-5 w-5 animate-spin" />Loading persisted operations…</div>;
+
   return (
-    <div className="flex h-full flex-col">
-      {/* Workspace Header & Controls */}
-      <div className="bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between shrink-0">
-        <div>
-          <h1 className="text-xl font-bold text-slate-900">Autonomous Image Generator</h1>
-          <div className="flex items-center text-sm text-slate-500 mt-1 space-x-2">
-            <span className="flex items-center"><Activity className="w-4 h-4 mr-1 text-emerald-500" /> System Online</span>
-            <span>&bull;</span>
-            <span>Queue: 42 Pending</span>
-          </div>
-        </div>
-        
-        <div className="flex items-center space-x-3">
-          <button className="inline-flex items-center px-3 py-2 border border-slate-200 shadow-sm text-sm leading-4 font-medium rounded-md text-slate-700 bg-white hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
-            <Pause className="w-4 h-4 mr-2" />
-            Pause
-          </button>
-          <button className="inline-flex items-center px-3 py-2 border border-transparent shadow-sm text-sm leading-4 font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
-            <Play className="w-4 h-4 mr-2" />
-            Start Engine
-          </button>
-          <div className="w-px h-8 bg-slate-200 mx-2"></div>
-          <button className="inline-flex items-center px-3 py-2 border border-transparent shadow-sm text-sm leading-4 font-medium rounded-md text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500">
-            <AlertOctagon className="w-4 h-4 mr-2" />
-            Emergency Stop
-          </button>
-        </div>
-      </div>
-
-      {/* Main Workspace Area */}
-      <div className="flex-1 overflow-hidden flex">
-        
-        {/* Left Column: Context & State */}
-        <div className="w-1/3 border-r border-slate-200 bg-slate-50/50 flex flex-col overflow-y-auto">
-          
-          <div className="p-6 border-b border-slate-200">
-            <h2 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-4">Active Job</h2>
-            <div className="bg-white border border-slate-200 rounded-lg shadow-sm p-4">
-              <div className="flex justify-between items-start mb-2">
-                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                  SCENE-042-B
-                </span>
-                <span className="text-xs text-slate-500">Attempt 1/3</span>
-              </div>
-              <h3 className="text-sm font-semibold text-slate-900">Lagos Island Market establishing shot</h3>
-              <p className="text-sm text-slate-600 mt-2 line-clamp-3">
-                Wide establishing shot of Balogun market during early morning. Bright natural lighting, 
-                dense crowds. Focus on architectural continuity and accurate 2024 transportation patterns.
-              </p>
-            </div>
-          </div>
-
-          <div className="p-6 border-b border-slate-200">
-            <h2 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-4">Lifecycle State</h2>
-            <div className="relative">
-              {/* Lifecycle Steps */}
-              <div className="space-y-4">
-                <LifecycleStep status="complete" name="Interpret & Decompose" />
-                <LifecycleStep status="complete" name="Build Requirements & Scene Graph" />
-                <LifecycleStep status="active" name="Generate Candidates" detail="Provider: FLUX.1 [schnell]" />
-                <LifecycleStep status="pending" name="Quality Evaluation Ensemble" />
-                <LifecycleStep status="pending" name="Diagnose & Repair" />
-                <LifecycleStep status="pending" name="Final QA & Approve" />
-              </div>
-              {/* Connecting line */}
-              <div className="absolute top-2 left-[11px] bottom-6 w-px bg-slate-200 -z-10" />
-            </div>
-          </div>
-
-          <div className="p-6">
-            <h2 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-4">Provider Health</h2>
-            <div className="space-y-3">
-              <ProviderStatus name="Primary Diffusion Cluster" latency="1.2s" status="good" />
-              <ProviderStatus name="Identity LoRA Node" latency="0.8s" status="good" />
-              <ProviderStatus name="Vision Evaluator" latency="2.4s" status="warning" />
-            </div>
-          </div>
-        </div>
-
-        {/* Right Column: Generation & Evaluation View */}
-        <div className="flex-1 flex flex-col bg-slate-100/50">
-          
-          <div className="p-6 border-b border-slate-200 flex justify-between items-center bg-white">
-            <div className="flex space-x-6">
-              <button className="text-sm font-medium text-indigo-600 border-b-2 border-indigo-600 pb-4 -mb-4">Candidates</button>
-              <button className="text-sm font-medium text-slate-500 hover:text-slate-700 pb-4 -mb-4">Quality Evidence</button>
-              <button className="text-sm font-medium text-slate-500 hover:text-slate-700 pb-4 -mb-4">Repair History</button>
-            </div>
-          </div>
-
-          <div className="flex-1 p-6 overflow-y-auto">
-            <div className="grid grid-cols-2 gap-6">
-              
-              {/* Skeleton Candidate Card */}
-              <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden flex flex-col">
-                <div className="aspect-video bg-slate-100 flex items-center justify-center relative">
-                  <div className="absolute inset-0 bg-gradient-to-r from-slate-100 via-slate-200 to-slate-100 animate-pulse" />
-                  <ImageIcon className="w-8 h-8 text-slate-300 relative z-10" />
-                  <div className="absolute top-2 left-2 px-2 py-1 bg-white/90 backdrop-blur rounded text-xs font-semibold text-slate-700 z-10">
-                    Candidate A: Literal
-                  </div>
-                </div>
-                <div className="p-4 flex-1 flex flex-col justify-between">
-                  <div>
-                    <div className="flex justify-between items-center mb-2">
-                      <span className="text-xs text-slate-500">Generating...</span>
-                      <span className="text-xs font-medium text-indigo-600">45%</span>
-                    </div>
-                    <div className="w-full bg-slate-100 rounded-full h-1.5 mb-4">
-                      <div className="bg-indigo-600 h-1.5 rounded-full" style={{ width: '45%' }}></div>
-                    </div>
-                  </div>
-                  <div className="text-xs text-slate-500 flex items-center">
-                    <Server className="w-3 h-3 mr-1" />
-                    Provider: In-flight
-                  </div>
-                </div>
-              </div>
-
-              {/* Empty slot */}
-              <div className="bg-slate-50 rounded-lg border-2 border-dashed border-slate-200 flex flex-col items-center justify-center text-slate-400 p-8 text-center">
-                <ImageIcon className="w-8 h-8 mb-2" />
-                <span className="text-sm font-medium">Candidate B Pending</span>
-                <span className="text-xs mt-1">Waiting for structural composition plan...</span>
-              </div>
-
-            </div>
-          </div>
-
-        </div>
-      </div>
+    <div className="min-h-full bg-slate-50">
+      <header className="border-b border-slate-200 bg-white px-6 py-5"><div className="flex flex-col justify-between gap-4 xl:flex-row xl:items-center"><div><h1 className="text-xl font-semibold text-slate-950">Autonomous Image Operations</h1><div className="mt-2 flex items-center gap-3 text-sm text-slate-500"><span className="flex items-center gap-1.5"><Activity className={`h-4 w-4 ${control?.desiredState === 'RUNNING' ? 'text-emerald-500' : 'text-amber-500'}`} />{control?.desiredState ?? 'Unavailable'}</span><span>•</span><span>{jobs.filter((job) => !terminal.has(job.status)).length} persisted jobs</span></div></div><div className="flex flex-wrap gap-2"><ControlButton icon={Play} label={control?.desiredState === 'PAUSED' ? 'Resume' : 'Start'} disabled={busy || control?.desiredState === 'RUNNING'} onClick={() => void changeControl(control?.desiredState === 'PAUSED' ? 'resume' : 'start')} /><ControlButton icon={Pause} label="Pause" disabled={busy || control?.desiredState !== 'RUNNING'} onClick={() => void changeControl('pause')} /><ControlButton icon={Square} label="Stop" disabled={busy || control?.desiredState === 'STOPPED'} onClick={() => void changeControl('stop')} /><ControlButton danger icon={AlertOctagon} label="Emergency stop" disabled={busy || control?.desiredState === 'EMERGENCY_STOP'} onClick={() => void changeControl('emergency_stop')} /></div></div></header>
+      <main className="grid gap-6 p-6 xl:grid-cols-[minmax(0,1fr)_360px]">
+        <section className="rounded-2xl border border-slate-200 bg-white shadow-sm"><div className="border-b border-slate-200 p-5"><h2 className="font-semibold text-slate-900">Active lifecycle</h2><p className="mt-1 text-xs text-slate-500">Progress is calculated only from the persisted stage.</p></div>{activeJob ? <div className="p-6"><div className="flex items-start justify-between"><div><span className="rounded-full bg-indigo-50 px-2.5 py-1 text-xs font-semibold text-indigo-700">{activeJob.sceneId ?? 'Scene unassigned'}</span><h3 className="mt-3 font-semibold text-slate-950">{activeJob.project.name}</h3></div><span className="text-sm font-medium text-slate-600">{activeStage?.replaceAll('_', ' ')}</span></div><div className="mt-6 h-2 overflow-hidden rounded-full bg-slate-100"><div className="h-full rounded-full bg-indigo-600 transition-all" style={{ width: `${progress}%` }} /></div><div className="mt-3 flex justify-between text-xs text-slate-500"><span>{activeJob.attempts.length} attempts</span><span>{progress.toFixed(1)}%</span><span>{activeJob.candidates.length} candidates</span></div></div> : <Empty message="No active job is persisted." />}</section>
+        <aside className="space-y-6"><div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><div className="flex items-center gap-3"><Workflow className="h-5 w-5 text-indigo-600" /><div><h2 className="font-semibold text-slate-900">Queue state</h2><p className="text-xs text-slate-500">MSSQL-backed</p></div></div><dl className="mt-5 space-y-3 text-sm"><Row label="Running control" value={control?.desiredState ?? 'Unknown'} /><Row label="Active jobs" value={`${jobs.filter((job) => !terminal.has(job.status)).length}`} /><Row label="Exceptions" value={`${jobs.filter((job) => job.status === 'HUMAN_EXCEPTION_REQUIRED').length}`} /></dl></div><div className="rounded-2xl border border-amber-200 bg-amber-50 p-5"><div className="flex gap-3"><Server className="mt-0.5 h-5 w-5 text-amber-700" /><div><h2 className="font-semibold text-amber-950">Providers not configured</h2><p className="mt-1 text-sm leading-6 text-amber-800">The engine will raise an explicit human exception instead of simulating generation or silently using placeholders.</p></div></div></div></aside>
+      </main>
+      {error && <div className="fixed bottom-5 right-5 flex max-w-md gap-3 rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800 shadow-lg"><TriangleAlert className="h-5 w-5 shrink-0" />{error}</div>}
     </div>
   );
 }
 
-function LifecycleStep({ status, name, detail }: { status: 'complete' | 'active' | 'pending' | 'failed', name: string, detail?: string }) {
-  return (
-    <div className="flex relative">
-      <div className="flex-shrink-0 mt-0.5 z-10 bg-white">
-        {status === 'complete' && <CheckCircle2 className="w-6 h-6 text-emerald-500" />}
-        {status === 'active' && <div className="w-6 h-6 rounded-full border-2 border-indigo-600 flex items-center justify-center"><div className="w-2 h-2 rounded-full bg-indigo-600 animate-pulse" /></div>}
-        {status === 'pending' && <div className="w-6 h-6 rounded-full border-2 border-slate-300 bg-white" />}
-        {status === 'failed' && <AlertCircle className="w-6 h-6 text-red-500" />}
-      </div>
-      <div className="ml-4 pb-2">
-        <h4 className={`text-sm font-medium ${status === 'active' ? 'text-indigo-900' : status === 'pending' ? 'text-slate-500' : 'text-slate-900'}`}>
-          {name}
-        </h4>
-        {detail && <p className="mt-1 text-xs text-slate-500">{detail}</p>}
-      </div>
-    </div>
-  );
-}
-
-function ProviderStatus({ name, latency, status }: { name: string, latency: string, status: 'good' | 'warning' | 'error' }) {
-  return (
-    <div className="flex items-center justify-between bg-white p-3 rounded border border-slate-200 shadow-sm">
-      <div className="flex items-center">
-        <Server className={`w-4 h-4 mr-2 ${status === 'good' ? 'text-emerald-500' : status === 'warning' ? 'text-amber-500' : 'text-red-500'}`} />
-        <span className="text-sm font-medium text-slate-700">{name}</span>
-      </div>
-      <div className="text-xs text-slate-500 flex items-center">
-        <Clock className="w-3 h-3 mr-1" />
-        {latency}
-      </div>
-    </div>
-  );
-}
+function ControlButton({ icon: Icon, label, disabled, danger = false, onClick }: { icon: typeof Play; label: string; disabled: boolean; danger?: boolean; onClick: () => void }) { return <button type="button" disabled={disabled} onClick={onClick} className={`inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold shadow-sm disabled:cursor-not-allowed disabled:opacity-40 ${danger ? 'bg-rose-600 text-white hover:bg-rose-700' : 'border border-slate-200 bg-white text-slate-700 hover:bg-slate-50'}`}><Icon className="h-4 w-4" />{label}</button>; }
+function Row({ label, value }: { label: string; value: string }) { return <div className="flex justify-between"><dt className="text-slate-500">{label}</dt><dd className="font-medium text-slate-900">{value}</dd></div>; }
+function Empty({ message }: { message: string }) { return <div className="flex flex-col items-center px-6 py-16 text-center"><Workflow className="h-8 w-8 text-slate-300" /><p className="mt-3 text-sm font-medium text-slate-700">{message}</p></div>; }

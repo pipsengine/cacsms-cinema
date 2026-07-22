@@ -1,22 +1,36 @@
-console.log('Starting cacsms-cinema background worker...');
+import { prisma } from '../../../lib/db';
+import { JobOrchestrator } from '../../../lib/job-orchestrator';
 
-// This main entry point acts as the background worker for the durable generation queue
-// and system orchestration, fulfilling the requirement for a separate backend process.
-
+const POLL_INTERVAL_MS = 5000;
 let isRunning = true;
 
-const shutdown = () => {
-  console.log('Shutting down background worker...');
+const delay = (milliseconds: number) =>
+  new Promise((resolve) => setTimeout(resolve, milliseconds));
+
+const shutdown = (signal: string) => {
+  console.log(`${signal} received; finishing the current worker cycle...`);
   isRunning = false;
-  process.exit(0);
 };
 
-process.on('SIGINT', shutdown);
-process.on('SIGTERM', shutdown);
+process.on('SIGINT', () => shutdown('SIGINT'));
+process.on('SIGTERM', () => shutdown('SIGTERM'));
 
-// Placeholder polling loop for the durable state machine outbox queue
-setInterval(() => {
-  if (!isRunning) return;
-  // Implement queue polling here in future phases
-  // console.log('Checking MSSQL for pending jobs...');
-}, 10000);
+async function runWorker() {
+  console.log('Starting cacsms-cinema background worker...');
+  console.log('Background worker listening for jobs...');
+
+  while (isRunning) {
+    await JobOrchestrator.pollAndProcessJobs();
+    if (isRunning) await delay(POLL_INTERVAL_MS);
+  }
+}
+
+runWorker()
+  .catch((error) => {
+    console.error('Background worker stopped unexpectedly:', error);
+    process.exitCode = 1;
+  })
+  .finally(async () => {
+    await prisma.$disconnect();
+    console.log('Background worker stopped.');
+  });

@@ -8,35 +8,56 @@ datasource db {
 }
 
 model Project {
-  id          String   @id @default(uuid())
+  id          String    @id @default(uuid())
   name        String
   description String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
   jobs        Job[]
+
+  @@index([deletedAt])
 }
 
 model Job {
-  id           String   @id @default(uuid())
-  projectId    String
-  project      Project  @relation(fields: [projectId], references: [id])
-  sceneId      String?
-  status       String   // e.g. DISCOVER, INTERPRET, COMPILE_PROMPT, GENERATE_CANDIDATES, APPROVE, COMPLETED, FAILED
-  priority     Int      @default(0)
-  budget       Float?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id                String    @id @default(uuid())
+  projectId         String
+  project           Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  sceneId           String?
+  status            String    @default("DISCOVER") // e.g. DISCOVER, INTERPRET, COMPILE_PROMPT, GENERATE_CANDIDATES, EVALUATE, DIAGNOSE, REPAIR, APPROVE, COMPLETED, FAILED
+  priority          Int       @default(0)
+  budget            Float?
+  idempotencyKey    String?   @unique
+  correlationId     String    @default(uuid())
+  attemptCount      Int       @default(0)
+  maxAttempts       Int       @default(3)
+  leaseOwner        String?
+  leaseExpiresAt    DateTime?
+  cancelRequestedAt DateTime?
+  startedAt         DateTime?
+  completedAt       DateTime?
+  failureCode       String?
+  errorJson         String?
+  version           Int       @default(1)
+  deletedAt         DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
 
-  attempts     GenerationAttempt[]
-  candidates   Candidate[]
+  attempts        GenerationAttempt[]
+  candidates      Candidate[]
+  stageExecutions JobStageExecution[]
+
+  @@index([status, priority, createdAt])
+  @@index([leaseExpiresAt])
+  @@index([deletedAt])
 }
 
 model GenerationAttempt {
   id            String   @id @default(uuid())
   jobId         String
-  job           Job      @relation(fields: [jobId], references: [id])
+  job           Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
   stage         String
-  status        String   // PENDING, IN_PROGRESS, SUCCESS, FAILED
+  status        String // PENDING, IN_PROGRESS, SUCCESS, FAILED
   providerUsed  String?
   modelUsed     String?
   cost          Float?
@@ -45,32 +66,251 @@ model GenerationAttempt {
   durationMs    Int?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
+
+  @@index([jobId, stage, status])
+  @@index([correlationId])
+}
+
+model JobStageExecution {
+  id              String    @id @default(uuid())
+  jobId           String
+  job             Job       @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  stage           String
+  status          String    @default("PENDING")
+  attemptNumber   Int       @default(1)
+  inputJson       String?
+  outputJson      String?
+  startedAt       DateTime?
+  completedAt     DateTime?
+  durationMs      Int?
+  failureCode     String?
+  errorJson       String?
+  retryDecision   String?
+  providerId      String?
+  modelId         String?
+  workflowVersion String?
+  cost            Float?
+  correlationId   String
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@unique([jobId, stage, attemptNumber])
+  @@index([status, createdAt])
+  @@index([correlationId])
 }
 
 model Candidate {
   id            String   @id @default(uuid())
   jobId         String
-  job           Job      @relation(fields: [jobId], references: [id])
+  job           Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
   imageUrl      String
-  status        String   // GENERATED, EVALUATING, REJECTED, APPROVED
-  providerId    String
-  modelId       String
+  storageKey    String?
+  sha256        String?
+  mimeType      String?
+  byteSize      Int?
+  score         Float    @default(0)
+  metadata      String   @default("{}") // JSON stored as string
+  candidateType String   @default("generated") // "literal", "variant", "repair"
+  status        String   @default("GENERATED") // GENERATED, EVALUATING, REJECTED, APPROVED
+  providerId    String?
+  modelId       String?
   seed          String?
-  width         Int?
-  height        Int?
+  width         Int      @default(1024)
+  height        Int      @default(768)
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
-  assets        Asset[]
+  assets          Asset[]
+  fileValidations FileValidation[]
+  evaluations     QualityEvaluation[]
+  defects         ImageDefect[]
+  repairs         RepairAction[]
+
+  @@index([jobId, status])
+  @@index([sha256])
 }
 
 model Asset {
-  id            String   @id @default(uuid())
-  candidateId   String
-  candidate     Candidate @relation(fields: [candidateId], references: [id])
-  assetUrl      String
+  id          String         @id @default(uuid())
+  candidateId String
+  candidate   Candidate      @relation(fields: [candidateId], references: [id])
+  assetUrl    String
+  version     Int            @default(1)
+  status      String // APPROVED, QUARANTINED, ARCHIVED
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+  versions    AssetVersion[]
+
+  @@index([candidateId, status])
+}
+
+model AssetVersion {
+  id             String   @id @default(uuid())
+  assetId        String
+  asset          Asset    @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  version        Int
+  storageKey     String
+  deliveryUrl    String
+  sha256         String
+  mimeType       String
+  byteSize       Int
+  width          Int
+  height         Int
+  metadataJson   String   @default("{}")
+  provenanceJson String
+  createdAt      DateTime @default(now())
+
+  @@unique([assetId, version])
+  @@unique([storageKey])
+}
+
+model FileValidation {
+  id             String    @id @default(uuid())
+  candidateId    String
+  candidate      Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  passed         Boolean
+  mimeType       String?
+  signatureValid Boolean   @default(false)
+  decoded        Boolean   @default(false)
+  width          Int?
+  height         Int?
+  byteSize       Int?
+  pixelVariance  Float?
+  alphaCoverage  Float?
+  storageWriteOk Boolean   @default(false)
+  readBackOk     Boolean   @default(false)
+  browserSafe    Boolean   @default(false)
+  sha256         String?
+  failureCode    String?
+  evidenceJson   String    @default("[]")
+  createdAt      DateTime  @default(now())
+
+  @@index([candidateId, passed])
+}
+
+model QualityEvaluation {
+  id                 String    @id @default(uuid())
+  candidateId        String
+  candidate          Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  evaluatorId        String
+  modelVersion       String
+  score              Float
+  confidence         Float
+  passed             Boolean
+  criticalGate       Boolean   @default(false)
+  evidenceJson       String    @default("[]")
+  recommendedActions String    @default("[]")
+  createdAt          DateTime  @default(now())
+
+  @@index([candidateId, passed, criticalGate])
+}
+
+model ImageDefect {
+  id                String    @id @default(uuid())
+  candidateId       String
+  candidate         Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  code              String
+  severity          String
+  regionJson        String?
+  description       String
+  evidenceJson      String    @default("[]")
+  recommendedAction String
+  status            String    @default("OPEN")
+  createdAt         DateTime  @default(now())
+  resolvedAt        DateTime?
+
+  @@index([candidateId, severity, status])
+}
+
+model RepairAction {
+  id                String    @id @default(uuid())
+  candidateId       String
+  candidate         Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  defectId          String?
+  action            String
+  status            String    @default("PENDING")
+  maskStorageKey    String?
+  outputCandidateId String?
+  providerId        String?
+  modelId           String?
+  workflowVersion   String?
+  errorJson         String?
+  startedAt         DateTime?
+  completedAt       DateTime?
+  createdAt         DateTime  @default(now())
+
+  @@index([candidateId, status])
+}
+
+model SystemControl {
+  id            String   @id @default("global")
+  desiredState  String   @default("STOPPED")
+  reason        String?
+  requestedBy   String   @default("operator")
+  correlationId String   @default(uuid())
   version       Int      @default(1)
-  status        String   // APPROVED, QUARANTINED, ARCHIVED
+  updatedAt     DateTime @updatedAt
+  createdAt     DateTime @default(now())
+}
+
+model WorkerLease {
+  resourceKey String   @id
+  ownerId     String
+  expiresAt   DateTime
+  heartbeatAt DateTime @default(now())
+  createdAt   DateTime @default(now())
+
+  @@index([expiresAt])
+}
+
+model IdempotencyRecord {
+  key           String   @id
+  scope         String
+  requestHash   String
+  status        String   @default("IN_PROGRESS")
+  statusCode    Int?
+  responseJson  String?
+  correlationId String
+  expiresAt     DateTime
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
+
+  @@index([scope, expiresAt])
+}
+
+model AuditEvent {
+  id            String   @id @default(uuid())
+  actorType     String
+  actorId       String?
+  action        String
+  entityType    String
+  entityId      String
+  beforeJson    String?
+  afterJson     String?
+  correlationId String
+  ipAddress     String?
+  createdAt     DateTime @default(now())
+
+  @@index([entityType, entityId, createdAt])
+  @@index([correlationId])
+}
+
+model OutboxEvent {
+  id            String    @id @default(uuid())
+  aggregateType String
+  aggregateId   String
+  eventType     String
+  eventVersion  Int       @default(1)
+  payloadJson   String
+  status        String    @default("PENDING")
+  attempts      Int       @default(0)
+  availableAt   DateTime  @default(now())
+  processedAt   DateTime?
+  lastError     String?
+  correlationId String
+  createdAt     DateTime  @default(now())
+
+  @@index([status, availableAt])
+  @@index([aggregateType, aggregateId])
+  @@index([correlationId])
 }
