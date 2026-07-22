@@ -1,0 +1,76 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlserver"
+  url      = env("DATABASE_URL")
+}
+
+model Project {
+  id          String   @id @default(uuid())
+  name        String
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  jobs        Job[]
+}
+
+model Job {
+  id           String   @id @default(uuid())
+  projectId    String
+  project      Project  @relation(fields: [projectId], references: [id])
+  sceneId      String?
+  status       String   // e.g. DISCOVER, INTERPRET, COMPILE_PROMPT, GENERATE_CANDIDATES, APPROVE, COMPLETED, FAILED
+  priority     Int      @default(0)
+  budget       Float?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  attempts     GenerationAttempt[]
+  candidates   Candidate[]
+}
+
+model GenerationAttempt {
+  id            String   @id @default(uuid())
+  jobId         String
+  job           Job      @relation(fields: [jobId], references: [id])
+  stage         String
+  status        String   // PENDING, IN_PROGRESS, SUCCESS, FAILED
+  providerUsed  String?
+  modelUsed     String?
+  cost          Float?
+  errorMessage  String?
+  correlationId String?
+  durationMs    Int?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+model Candidate {
+  id            String   @id @default(uuid())
+  jobId         String
+  job           Job      @relation(fields: [jobId], references: [id])
+  imageUrl      String
+  status        String   // GENERATED, EVALUATING, REJECTED, APPROVED
+  providerId    String
+  modelId       String
+  seed          String?
+  width         Int?
+  height        Int?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  assets        Asset[]
+}
+
+model Asset {
+  id            String   @id @default(uuid())
+  candidateId   String
+  candidate     Candidate @relation(fields: [candidateId], references: [id])
+  assetUrl      String
+  version       Int      @default(1)
+  status        String   // APPROVED, QUARANTINED, ARCHIVED
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
