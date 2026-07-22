@@ -1,8 +1,11 @@
 import { prisma } from '../../../lib/db';
 import { JobOrchestrator } from '../../../lib/job-orchestrator';
+import { registerAutonomousStageHandlers } from '../../../lib/autonomous-stage-handlers';
 
-const POLL_INTERVAL_MS = 5000;
+const POLL_INTERVAL_MS = Number(process.env.WORKER_POLL_INTERVAL_MS || 1000);
 let isRunning = true;
+
+registerAutonomousStageHandlers();
 
 const delay = (milliseconds: number) =>
   new Promise((resolve) => setTimeout(resolve, milliseconds));

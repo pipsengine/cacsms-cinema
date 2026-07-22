@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
-import { isJobStatus } from '@/lib/job-status';
 
 // GET all jobs
 export async function GET(request: NextRequest) {
@@ -35,12 +34,16 @@ export async function GET(request: NextRequest) {
 // POST create new job
 export async function POST(request: NextRequest) {
   try {
+    const idempotencyKey = request.headers.get('Idempotency-Key')?.trim();
+    if (!idempotencyKey) return NextResponse.json({ error: 'Idempotency-Key header is required.' }, { status: 400 });
+    const replay = await prisma.job.findUnique({ where: { idempotencyKey }, include: { project: true, attempts: true, candidates: true } });
+    if (replay) return NextResponse.json(replay, { status: 200, headers: { 'Idempotent-Replay': 'true' } });
     const body: unknown = await request.json();
     if (!body || typeof body !== 'object') {
       return NextResponse.json({ error: 'A JSON object is required' }, { status: 400 });
     }
 
-    const { projectId, sceneId, status = 'DISCOVER', budget, priority = 0 } = body as Record<string, unknown>;
+    const { projectId, sceneId, status, budget, priority = 0 } = body as Record<string, unknown>;
 
     if (typeof projectId !== 'string' || !projectId.trim()) {
       return NextResponse.json(
@@ -51,8 +54,8 @@ export async function POST(request: NextRequest) {
     if (sceneId !== undefined && typeof sceneId !== 'string') {
       return NextResponse.json({ error: 'sceneId must be a string' }, { status: 400 });
     }
-    if (!isJobStatus(status)) {
-      return NextResponse.json({ error: 'Invalid job status' }, { status: 400 });
+    if (status !== undefined && status !== 'DISCOVER') {
+      return NextResponse.json({ error: 'New jobs must begin at DISCOVER; lifecycle stages cannot be bypassed.' }, { status: 400 });
     }
     if (budget !== undefined && (typeof budget !== 'number' || !Number.isFinite(budget) || budget < 0)) {
       return NextResponse.json({ error: 'budget must be a non-negative number' }, { status: 400 });
@@ -65,7 +68,8 @@ export async function POST(request: NextRequest) {
       data: {
         projectId,
         sceneId,
-        status,
+        status: 'DISCOVER',
+        idempotencyKey,
         budget,
         priority,
       },

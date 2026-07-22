@@ -39,7 +39,7 @@ export class JobOrchestrator {
     const nextStatus = this.getNextStatus(currentStatus);
     if (!nextStatus) return;
 
-    const claimedStatus = `${PROCESSING_PREFIX}${nextStatus}`;
+    const claimedStatus = `${PROCESSING_PREFIX}${currentStatus}`;
     const correlationId = job.correlationId || randomUUID();
     const startedAt = new Date();
     const attemptNumber = job.attemptCount + 1;
@@ -63,25 +63,25 @@ export class JobOrchestrator {
       if (claim.count !== 1) return null;
 
       const execution = await transaction.jobStageExecution.create({
-        data: { jobId, stage: nextStatus, status: 'IN_PROGRESS', attemptNumber, startedAt, correlationId },
+        data: { jobId, stage: currentStatus, status: 'IN_PROGRESS', attemptNumber, startedAt, correlationId },
       });
       await transaction.outboxEvent.create({
         data: {
           aggregateType: 'Job',
           aggregateId: jobId,
           eventType: 'JobStageStarted',
-          payloadJson: JSON.stringify({ jobId, stage: nextStatus, executionId: execution.id }),
+          payloadJson: JSON.stringify({ jobId, stage: currentStatus, executionId: execution.id }),
           correlationId,
         },
       });
       return execution;
-    });
+    }, { timeout: 30_000 });
     if (!claimed) return;
 
     try {
-      const handler = stageHandlers.get(nextStatus);
-      if (!handler) throw new Error(`NO_STAGE_HANDLER: No production handler is registered for ${nextStatus}`);
-      const output = await handler({ jobId, stage: nextStatus, correlationId });
+      const handler = stageHandlers.get(currentStatus);
+      if (!handler) throw new Error(`NO_STAGE_HANDLER: No production handler is registered for ${currentStatus}`);
+      const output = await handler({ jobId, stage: currentStatus, correlationId });
       const completedAt = new Date();
 
       await prisma.$transaction([
@@ -94,7 +94,7 @@ export class JobOrchestrator {
           data: { status: nextStatus, leaseOwner: null, leaseExpiresAt: null, version: { increment: 1 }, ...(nextStatus === 'COMPLETED' && { completedAt }) },
         }),
         prisma.outboxEvent.create({
-          data: { aggregateType: 'Job', aggregateId: jobId, eventType: 'JobStageCompleted', payloadJson: JSON.stringify({ jobId, stage: nextStatus }), correlationId },
+          data: { aggregateType: 'Job', aggregateId: jobId, eventType: 'JobStageCompleted', payloadJson: JSON.stringify({ jobId, stage: currentStatus, nextStatus }), correlationId },
         }),
       ]);
     } catch (error) {
@@ -111,7 +111,7 @@ export class JobOrchestrator {
           data: { status: 'HUMAN_EXCEPTION_REQUIRED', failureCode, errorJson: JSON.stringify({ message }), leaseOwner: null, leaseExpiresAt: null, version: { increment: 1 } },
         }),
         prisma.outboxEvent.create({
-          data: { aggregateType: 'Job', aggregateId: jobId, eventType: 'HumanExceptionRequired', payloadJson: JSON.stringify({ jobId, stage: nextStatus, failureCode }), correlationId },
+          data: { aggregateType: 'Job', aggregateId: jobId, eventType: 'HumanExceptionRequired', payloadJson: JSON.stringify({ jobId, stage: currentStatus, failureCode }), correlationId },
         }),
       ]);
     }

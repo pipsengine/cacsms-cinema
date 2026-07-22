@@ -5,7 +5,9 @@ export interface SystemStatus {
   activeJobs: number;
   completedJobs: number;
   failedJobs: number;
+  exceptionJobs: number;
   averageProcessingTime: number;
+  systemState: string;
   systemUptime: string;
   lastChecked: Date;
 }
@@ -15,27 +17,28 @@ export class SystemStatusMonitor {
 
   static async getStatus(): Promise<SystemStatus> {
     try {
-      const jobs = await prisma.job.findMany();
-      const activeJobs = jobs.filter(j => 
-        j.status !== 'COMPLETED' && j.status !== 'FAILED'
-      ).length;
-      const completedJobs = jobs.filter(j => j.status === 'COMPLETED').length;
-      const failedJobs = jobs.filter(j => j.status === 'FAILED').length;
-
-      const attempts = await prisma.generationAttempt.findMany();
-      const completedAttempts = attempts.filter(a => a.durationMs).map(a => a.durationMs!);
-      const averageProcessingTime = completedAttempts.length > 0
-        ? completedAttempts.reduce((a, b) => a + b, 0) / completedAttempts.length
-        : 0;
+      const [statusCounts, attemptMetrics, control] = await Promise.all([
+        prisma.job.groupBy({ by: ['status'], where: { deletedAt: null }, _count: { _all: true } }),
+        prisma.generationAttempt.aggregate({ where: { durationMs: { not: null } }, _avg: { durationMs: true } }),
+        prisma.systemControl.findUnique({ where: { id: 'global' } }),
+      ]);
+      const counts = new Map(statusCounts.map((entry) => [entry.status, entry._count._all]));
+      const activeJobs = statusCounts.filter((entry) => !['COMPLETED', 'FAILED', 'CANCELLED', 'HUMAN_EXCEPTION_REQUIRED'].includes(entry.status)).reduce((sum, entry) => sum + entry._count._all, 0);
+      const completedJobs = counts.get('COMPLETED') || 0;
+      const failedJobs = counts.get('FAILED') || 0;
+      const exceptionJobs = counts.get('HUMAN_EXCEPTION_REQUIRED') || 0;
+      const averageProcessingTime = attemptMetrics._avg.durationMs || 0;
 
       const uptime = this.calculateUptime();
 
       return {
-        isHealthy: failedJobs === 0 || (failedJobs / jobs.length) < 0.1,
+        isHealthy: failedJobs === 0 && exceptionJobs === 0,
         activeJobs,
         completedJobs,
         failedJobs,
+        exceptionJobs,
         averageProcessingTime,
+        systemState: control?.desiredState || 'STOPPED',
         systemUptime: uptime,
         lastChecked: new Date(),
       };
@@ -46,7 +49,9 @@ export class SystemStatusMonitor {
         activeJobs: 0,
         completedJobs: 0,
         failedJobs: 0,
+        exceptionJobs: 0,
         averageProcessingTime: 0,
+        systemState: 'UNKNOWN',
         systemUptime: '0h',
         lastChecked: new Date(),
       };

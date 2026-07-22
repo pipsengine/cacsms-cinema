@@ -1,21 +1,22 @@
 import React from 'react';
-import { Bell, Search } from 'lucide-react';
+import { Bell, Menu, Search } from 'lucide-react';
 
-export function TopNav() {
+export function TopNav({ onMenu }: { onMenu: () => void }) {
   return (
-    <header className="h-16 border-b border-gray-200 bg-white flex items-center justify-between px-6 shrink-0">
-      <div className="flex-1 flex">
-        <form className="w-full flex md:ml-0" action="#" method="GET">
+    <header className="flex h-16 shrink-0 items-center gap-[22px] border-b border-[#e7ebf2] bg-white px-4 md:px-7">
+      <button type="button" onClick={onMenu} className="text-[#152b50] md:hidden" aria-label="Toggle navigation"><Menu className="h-5 w-5" /></button>
+      <div className="flex flex-1">
+        <form className="flex w-full" action="/" method="GET">
           <label htmlFor="search-field" className="sr-only">
             Search
           </label>
-          <div className="relative w-full text-slate-400 focus-within:text-slate-600 max-w-md">
-            <div className="absolute inset-y-0 left-0 flex items-center pointer-events-none">
-              <Search className="h-5 w-5" aria-hidden="true" />
+          <div className="relative w-full max-w-[1270px] text-[#152b50]">
+            <div className="pointer-events-none absolute inset-y-0 left-3.5 flex items-center">
+              <Search className="h-[19px] w-[19px]" aria-hidden="true" />
             </div>
             <input
               id="search-field"
-              className="block w-full h-full pl-8 pr-3 py-2 border-transparent text-slate-900 placeholder-slate-500 focus:outline-none focus:placeholder-slate-400 focus:ring-0 focus:border-transparent sm:text-sm bg-transparent"
+              className="block h-[42px] w-full rounded-lg border border-[#dbe2ed] bg-transparent py-2 pl-12 pr-3 text-[13px] text-[#162849] outline-none placeholder:text-[#8796b4] focus:border-[#aebed8]"
               placeholder="Search projects, scenes, or assets..."
               type="search"
               name="search"
@@ -23,16 +24,16 @@ export function TopNav() {
           </div>
         </form>
       </div>
-      <div className="ml-4 flex items-center md:ml-6 space-x-4">
+      <div className="ml-auto flex items-center gap-5">
         <button
           type="button"
-          className="bg-white p-1 rounded-full text-slate-400 hover:text-slate-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-slate-500"
+          className="rounded-full bg-white p-1 text-[#10254d] hover:bg-slate-50"
         >
           <span className="sr-only">View notifications</span>
-          <Bell className="h-6 w-6" aria-hidden="true" />
+          <Bell className="h-[21px] w-[21px]" aria-hidden="true" />
         </button>
         <div className="flex items-center">
-          <div className="h-8 w-8 rounded-full bg-slate-200 flex items-center justify-center text-sm font-medium text-slate-600">
+          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#edf2ff] text-[13px] font-medium text-[#10254d]">
             OP
           </div>
         </div>

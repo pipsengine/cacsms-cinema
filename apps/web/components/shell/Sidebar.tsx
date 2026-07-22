@@ -1,4 +1,7 @@
+'use client';
+
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import {
   LayoutDashboard,
   Image as ImageIcon,
@@ -33,60 +36,40 @@ const system = [
   { name: 'Settings', href: '/settings', icon: Settings },
 ];
 
-export function Sidebar() {
+export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const pathname = usePathname();
+  const isActive = (href: string) => href === '/visuals/image-generator'
+    ? pathname === '/' || pathname.startsWith(href)
+    : href !== '/' && pathname === href;
+  const groups = [{ items: navigation }, { title: 'Libraries', items: libraries }, { title: 'System', items: system }];
   return (
-    <aside className="w-64 border-r border-gray-200 bg-white h-screen flex flex-col flex-shrink-0">
-      <div className="h-16 flex items-center px-6 border-b border-gray-200 shrink-0">
-        <h1 className="font-bold text-lg text-slate-900 tracking-tight">cacsms-cinema</h1>
+    <>
+      {open && <button type="button" aria-label="Close navigation" onClick={onClose} className="fixed inset-0 z-30 bg-slate-950/20 md:hidden" />}
+      <aside className={`fixed inset-y-0 left-0 z-40 flex h-screen w-[220px] shrink-0 flex-col border-r border-[#e3e8f1] bg-white transition-transform md:static md:translate-x-0 ${open ? 'translate-x-0' : '-translate-x-full'}`}>
+      <div className="flex h-16 shrink-0 items-center border-b border-[#e9edf4] px-[22px]">
+        <h1 className="text-[17px] font-bold tracking-[-0.025em] text-[#101a35]">cacsms-cinema</h1>
       </div>
-      <nav className="flex-1 overflow-y-auto py-4 space-y-8">
-        <div className="px-3">
-          <div className="space-y-1">
-            {navigation.map((item) => (
+      <nav className="flex-1 overflow-y-auto py-2">
+        {groups.map((group) => <div className="px-[9px] py-[10px]" key={group.title ?? 'primary'}>
+          {group.title && <h3 className="mb-2 mt-4 px-[11px] text-[11px] font-medium uppercase tracking-[0.08em] text-[#7890bc]">{group.title}</h3>}
+          <div>
+            {group.items.map((item) => {
+              const active = isActive(item.href);
+              return (
               <Link
                 key={item.name}
                 href={item.href}
-                className="group flex items-center px-3 py-2 text-sm font-medium text-slate-700 rounded-md hover:text-slate-900 hover:bg-slate-50 transition-colors"
+                onClick={onClose}
+                className={`group my-0.5 flex items-center gap-[13px] rounded-lg border px-3 py-[9px] text-[13px] font-medium transition-colors ${active ? 'border-[#10254d] bg-[#fbfcff] text-[#10254d] shadow-[0_1px_3px_rgba(20,42,83,.1)]' : 'border-transparent text-[#3f5782] hover:bg-[#f5f8ff]'}`}
               >
-                <item.icon className="text-slate-400 group-hover:text-slate-500 flex-shrink-0 h-5 w-5 mr-3" aria-hidden="true" />
+                <item.icon className="h-[18px] w-[18px] shrink-0" aria-hidden="true" />
                 {item.name}
               </Link>
-            ))}
+            )})}
           </div>
-        </div>
-
-        <div className="px-3">
-          <h3 className="px-3 text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Libraries</h3>
-          <div className="space-y-1">
-            {libraries.map((item) => (
-              <Link
-                key={item.name}
-                href={item.href}
-                className="group flex items-center px-3 py-2 text-sm font-medium text-slate-700 rounded-md hover:text-slate-900 hover:bg-slate-50 transition-colors"
-              >
-                <item.icon className="text-slate-400 group-hover:text-slate-500 flex-shrink-0 h-5 w-5 mr-3" aria-hidden="true" />
-                {item.name}
-              </Link>
-            ))}
-          </div>
-        </div>
-
-        <div className="px-3">
-          <h3 className="px-3 text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">System</h3>
-          <div className="space-y-1">
-            {system.map((item) => (
-              <Link
-                key={item.name}
-                href={item.href}
-                className="group flex items-center px-3 py-2 text-sm font-medium text-slate-700 rounded-md hover:text-slate-900 hover:bg-slate-50 transition-colors"
-              >
-                <item.icon className="text-slate-400 group-hover:text-slate-500 flex-shrink-0 h-5 w-5 mr-3" aria-hidden="true" />
-                {item.name}
-              </Link>
-            ))}
-          </div>
-        </div>
+        </div>)}
       </nav>
     </aside>
+    </>
   );
 }

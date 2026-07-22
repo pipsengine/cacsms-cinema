@@ -15,8 +15,133 @@ model Project {
   updatedAt   DateTime  @updatedAt
   deletedAt   DateTime?
   jobs        Job[]
+  scripts     Script[]
 
   @@index([deletedAt])
+}
+
+model Script {
+  id                String                  @id @default(uuid())
+  projectId         String
+  project           Project                 @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  title             String
+  logline           String?
+  genre             String?
+  targetDurationSec Int                     @default(900)
+  status            String                  @default("DRAFT")
+  version           Int                     @default(1)
+  deletedAt         DateTime?
+  createdAt         DateTime                @default(now())
+  updatedAt         DateTime                @updatedAt
+  scenes            ScriptScene[]
+  revisions         ScriptRevision[]
+  continuityIssues  ScriptContinuityIssue[]
+  automationRuns    ScriptAutomationRun[]
+
+  @@index([projectId, deletedAt, updatedAt])
+}
+
+model ScriptScene {
+  id                 String                  @id @default(uuid())
+  scriptId           String
+  script             Script                  @relation(fields: [scriptId], references: [id], onDelete: Cascade)
+  position           Int
+  sceneNumber        String
+  title              String
+  purpose            String                  @default("")
+  narrativeBeat      String                  @default("Context")
+  narration          String                  @default("")
+  visualIntention    String                  @default("")
+  locationPeriod     String                  @default("")
+  emotionalDirection String                  @default("")
+  cameraDirection    String                  @default("")
+  soundDirection     String                  @default("")
+  durationSec        Int                     @default(60)
+  status             String                  @default("DRAFT")
+  readinessScore     Float?
+  version            Int                     @default(1)
+  staleAt            DateTime?
+  createdAt          DateTime                @default(now())
+  updatedAt          DateTime                @updatedAt
+  evidence           ScriptEvidence[]
+  continuityIssues   ScriptContinuityIssue[]
+
+  @@unique([scriptId, position])
+  @@unique([scriptId, sceneNumber])
+  @@index([scriptId, status])
+}
+
+model ScriptEvidence {
+  id          String      @id @default(uuid())
+  sceneId     String
+  scene       ScriptScene @relation(fields: [sceneId], references: [id], onDelete: Cascade)
+  claim       String
+  sourceTitle String
+  sourceUrl   String?
+  status      String      @default("UNVERIFIED")
+  confidence  Float?
+  notes       String?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  @@index([sceneId, status])
+}
+
+model ScriptContinuityIssue {
+  id                String       @id @default(uuid())
+  scriptId          String
+  script            Script       @relation(fields: [scriptId], references: [id], onDelete: Cascade)
+  sceneId           String?
+  scene             ScriptScene? @relation(fields: [sceneId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  code              String
+  severity          String
+  status            String       @default("OPEN")
+  description       String
+  evidenceJson      String       @default("[]")
+  recommendedAction String
+  createdAt         DateTime     @default(now())
+  resolvedAt        DateTime?
+
+  @@index([scriptId, status, severity])
+  @@index([sceneId])
+}
+
+model ScriptRevision {
+  id            String   @id @default(uuid())
+  scriptId      String
+  script        Script   @relation(fields: [scriptId], references: [id], onDelete: Cascade)
+  version       Int
+  snapshotJson  String
+  changeSummary String
+  actorType     String
+  actorId       String?
+  correlationId String
+  createdAt     DateTime @default(now())
+
+  @@unique([scriptId, version])
+  @@index([correlationId])
+}
+
+model ScriptAutomationRun {
+  id            String    @id @default(uuid())
+  scriptId      String
+  script        Script    @relation(fields: [scriptId], references: [id], onDelete: Cascade)
+  status        String    @default("QUEUED")
+  stage         String    @default("OUTLINE")
+  providerId    String?
+  modelId       String?
+  inputHash     String
+  outputJson    String?
+  failureCode   String?
+  errorJson     String?
+  correlationId String
+  startedAt     DateTime?
+  completedAt   DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([scriptId, status, createdAt])
+  @@index([correlationId])
 }
 
 model Job {

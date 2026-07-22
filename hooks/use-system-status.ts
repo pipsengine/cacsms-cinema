@@ -7,7 +7,9 @@ export interface SystemStatus {
   activeJobs: number;
   completedJobs: number;
   failedJobs: number;
+  exceptionJobs: number;
   averageProcessingTime: number;
+  systemState: string;
   systemUptime: string;
   lastChecked: string;
 }

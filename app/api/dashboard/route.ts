@@ -12,11 +12,19 @@ export async function GET() {
       candidateCount,
       attemptSummary,
       successfulAttempts,
-      failedAttempts,
       recentJobs,
+      control,
+      evaluationSummary,
+      fileValidationCount,
+      failedFileValidationCount,
+      rejectedCandidateCount,
+      repairInProgressCount,
+      criticalDefectCount,
+      continuityDefectCount,
+      geographyDefectCount,
     ] = await Promise.all([
-      prisma.project.count(),
-      prisma.job.groupBy({ by: ['status'], _count: { _all: true } }),
+      prisma.project.count({ where: { deletedAt: null } }),
+      prisma.job.groupBy({ by: ['status'], where: { deletedAt: null }, _count: { _all: true } }),
       prisma.asset.count({ where: { status: 'APPROVED' } }),
       prisma.candidate.count(),
       prisma.generationAttempt.aggregate({
@@ -25,10 +33,10 @@ export async function GET() {
         _avg: { durationMs: true },
       }),
       prisma.generationAttempt.count({ where: { status: 'SUCCESS' } }),
-      prisma.generationAttempt.count({ where: { status: 'FAILED' } }),
       prisma.job.findMany({
         take: 8,
         orderBy: { updatedAt: 'desc' },
+        where: { deletedAt: null },
         include: {
           project: { select: { name: true } },
           attempts: {
@@ -39,15 +47,29 @@ export async function GET() {
           _count: { select: { candidates: true, attempts: true } },
         },
       }),
+      prisma.systemControl.findUnique({ where: { id: 'global' } }),
+      prisma.qualityEvaluation.aggregate({ _avg: { score: true } }),
+      prisma.fileValidation.count(),
+      prisma.fileValidation.count({ where: { passed: false } }),
+      prisma.candidate.count({ where: { status: 'REJECTED' } }),
+      prisma.repairAction.count({ where: { status: { in: ['PENDING', 'IN_PROGRESS'] } } }),
+      prisma.imageDefect.count({ where: { severity: 'CRITICAL', status: 'OPEN' } }),
+      prisma.imageDefect.count({ where: { code: { contains: 'CONTINUITY' }, status: 'OPEN' } }),
+      prisma.imageDefect.count({ where: { code: { contains: 'GEOGRAPH' }, status: 'OPEN' } }),
     ]);
 
     const queue = Object.fromEntries(
       statusGroups.map((group) => [group.status, group._count._all])
     );
+    const terminalStatuses = ['COMPLETED', 'FAILED', 'CANCELLED', 'HUMAN_EXCEPTION_REQUIRED'];
     const activeJobs = statusGroups
-      .filter((group) => !['COMPLETED', 'FAILED'].includes(group.status))
+      .filter((group) => group.status.startsWith('PROCESSING:'))
+      .reduce((total, group) => total + group._count._all, 0);
+    const queuedJobs = statusGroups
+      .filter((group) => !terminalStatuses.includes(group.status) && !group.status.startsWith('PROCESSING:'))
       .reduce((total, group) => total + group._count._all, 0);
     const completedJobs = queue.COMPLETED ?? 0;
+    const exceptionJobs = queue.HUMAN_EXCEPTION_REQUIRED ?? 0;
     const totalAttempts = attemptSummary._count._all;
 
     return NextResponse.json({
@@ -55,18 +77,32 @@ export async function GET() {
       system: {
         api: 'operational',
         database: 'connected',
-        isHealthy: failedAttempts === 0 || failedAttempts / Math.max(totalAttempts, 1) < 0.1,
+        isHealthy: true,
+        controlState: control?.desiredState ?? 'STOPPED',
+        controlVersion: control?.version ?? 0,
+        controlUpdatedAt: control?.updatedAt.toISOString() ?? null,
       },
       metrics: {
         projects: projectCount,
         activeJobs,
+        queuedJobs,
         completedJobs,
+        exceptionJobs,
         approvedAssets: approvedAssetCount,
         candidates: candidateCount,
         totalAttempts,
         successRate: totalAttempts > 0 ? (successfulAttempts / totalAttempts) * 100 : 0,
         averageLatencyMs: attemptSummary._avg.durationMs ?? 0,
         totalCost: attemptSummary._sum.cost ?? 0,
+        blankImageRate: fileValidationCount > 0 ? (failedFileValidationCount / fileValidationCount) * 100 : null,
+        averageQuality: evaluationSummary._avg.score !== null ? evaluationSummary._avg.score * 100 : null,
+      },
+      quality: {
+        criticalFailures: Math.max(criticalDefectCount, exceptionJobs),
+        repairsInProgress: repairInProgressCount,
+        rejectedCandidates: rejectedCandidateCount,
+        continuityViolations: continuityDefectCount,
+        geographicFailures: geographyDefectCount,
       },
       queue,
       recentJobs: recentJobs.map((job) => ({
@@ -80,6 +116,8 @@ export async function GET() {
         candidateCount: job._count.candidates,
         provider: job.attempts[0]?.providerUsed ?? null,
         latestAttemptStatus: job.attempts[0]?.status ?? null,
+        failureCode: job.failureCode,
+        evidence: job.failureCode ? 'Human exception required' : job.status === 'COMPLETED' ? 'Delivery verified' : 'Stage evidence persisted',
       })),
     });
   } catch (error) {

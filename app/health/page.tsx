@@ -11,11 +11,11 @@ export default function SystemHealthPage() {
       <div><p className="text-xs font-semibold uppercase tracking-[0.18em] text-indigo-600">Measured services</p><h1 className="mt-2 text-3xl font-semibold text-slate-950">System Health</h1><p className="mt-2 text-sm text-slate-500">Only persisted database and API signals are shown; uninstrumented CPU, memory, and provider metrics are omitted.</p></div>
       {error && <div className="flex gap-3 rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800"><TriangleAlert className="h-5 w-5" />{error}</div>}
       <div className="grid gap-4 md:grid-cols-3">
-        <HealthCard icon={Server} label="Status API" value={status ? 'Responding' : 'Unavailable'} healthy={Boolean(status)} />
+        <HealthCard icon={Server} label="Autonomous control" value={status?.systemState || 'Unavailable'} healthy={status?.systemState === 'RUNNING'} />
         <HealthCard icon={Database} label="MSSQL workflow state" value={status?.isHealthy ? 'Healthy' : 'Review required'} healthy={Boolean(status?.isHealthy)} />
-        <HealthCard icon={Activity} label="Recorded jobs" value={`${(status?.activeJobs ?? 0) + (status?.completedJobs ?? 0) + (status?.failedJobs ?? 0)}`} healthy={(status?.failedJobs ?? 0) === 0} />
+        <HealthCard icon={Activity} label="Exceptions" value={`${status?.exceptionJobs ?? 0}`} healthy={(status?.exceptionJobs ?? 0) === 0} />
       </div>
-      <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"><h2 className="font-semibold text-slate-900">Persisted workload</h2><dl className="mt-5 grid gap-5 sm:grid-cols-4"><Metric label="Active" value={status?.activeJobs ?? 0} /><Metric label="Completed" value={status?.completedJobs ?? 0} /><Metric label="Failed" value={status?.failedJobs ?? 0} /><Metric label="Average attempt" value={`${((status?.averageProcessingTime ?? 0) / 1000).toFixed(2)}s`} /></dl></div>
+      <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"><h2 className="font-semibold text-slate-900">Persisted workload</h2><dl className="mt-5 grid gap-5 sm:grid-cols-5"><Metric label="Active" value={status?.activeJobs ?? 0} /><Metric label="Completed" value={status?.completedJobs ?? 0} /><Metric label="Failed" value={status?.failedJobs ?? 0} /><Metric label="Exceptions" value={status?.exceptionJobs ?? 0} /><Metric label="Average attempt" value={`${((status?.averageProcessingTime ?? 0) / 1000).toFixed(2)}s`} /></dl></div>
     </div>
   );
 }

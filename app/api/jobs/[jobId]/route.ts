@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
-import { isJobStatus } from '@/lib/job-status';
 
 type RouteContext = { params: Promise<{ jobId: string }> };
 
@@ -11,8 +10,9 @@ export async function GET(_request: NextRequest, { params }: RouteContext) {
       where: { id: jobId },
       include: {
         project: true,
-        attempts: true,
-        candidates: true,
+        stageExecutions: { orderBy: { createdAt: 'asc' } },
+        attempts: { orderBy: { createdAt: 'asc' } },
+        candidates: { include: { fileValidations: true, evaluations: true, defects: true, assets: { include: { versions: true } } } },
       },
     });
 
@@ -36,9 +36,7 @@ export async function PATCH(request: NextRequest, { params }: RouteContext) {
     }
 
     const { status, budget, priority } = body as Record<string, unknown>;
-    if (status !== undefined && !isJobStatus(status)) {
-      return NextResponse.json({ error: 'Invalid job status' }, { status: 400 });
-    }
+    if (status !== undefined) return NextResponse.json({ error: 'Lifecycle status is worker-managed and cannot be patched.' }, { status: 400 });
     if (budget !== undefined && (typeof budget !== 'number' || !Number.isFinite(budget) || budget < 0)) {
       return NextResponse.json({ error: 'budget must be a non-negative number' }, { status: 400 });
     }
@@ -49,7 +47,6 @@ export async function PATCH(request: NextRequest, { params }: RouteContext) {
     const job = await prisma.job.update({
       where: { id: jobId },
       data: {
-        ...(status !== undefined && { status }),
         ...(budget !== undefined && { budget }),
         ...(priority !== undefined && { priority }),
       },
@@ -70,8 +67,8 @@ export async function PATCH(request: NextRequest, { params }: RouteContext) {
 export async function DELETE(_request: NextRequest, { params }: RouteContext) {
   try {
     const { jobId } = await params;
-    await prisma.job.delete({ where: { id: jobId } });
-    return NextResponse.json({ message: 'Job deleted successfully' });
+    await prisma.job.update({ where: { id: jobId }, data: { cancelRequestedAt: new Date(), deletedAt: new Date(), version: { increment: 1 } } });
+    return NextResponse.json({ message: 'Job cancellation and soft deletion recorded.' });
   } catch (error) {
     console.error('Failed to delete job:', error);
     return NextResponse.json({ error: 'Failed to delete job' }, { status: 500 });
