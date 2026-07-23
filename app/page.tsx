@@ -3,12 +3,13 @@
 import { useCallback, useEffect, useMemo, useState, type ComponentType } from 'react';
 import Link from 'next/link';
 import {
-  AlertTriangle, Boxes, CheckCircle2, ChevronRight, CircleDollarSign, Clock3,
-  Film, Folder, Gauge, Image as ImageIcon, MapPin, Pause, Play, ShieldCheck,
-  Sparkles, Square, WandSparkles, Wrench, XCircle,
+  AlertTriangle, Boxes, BrainCircuit, CheckCircle2, ChevronRight, CircleDollarSign, Clock3,
+  FileSearch, Film, Folder, Gauge, Image as ImageIcon, Lightbulb, MapPin, Pause, Play, ShieldCheck,
+  Sparkles, Square, Target, WandSparkles, Wrench, XCircle,
 } from 'lucide-react';
 import styles from './control-room.module.css';
 import { LIFECYCLE_STAGES } from '@/apps/web/config/lifecycle-navigation';
+import { ContentLifecyclePanel } from '@/apps/web/features/lifecycle/ContentLifecyclePanel';
 import { ControlRoomLifecycleStrip } from '@/apps/web/features/lifecycle/ControlRoomLifecycleStrip';
 
 interface DashboardData {
@@ -31,6 +32,10 @@ interface DashboardData {
 const TERMINAL = new Set(['COMPLETED', 'FAILED', 'CANCELLED', 'HUMAN_EXCEPTION_REQUIRED']);
 
 const tools = [
+  ['Strategy & Fields', '/strategy', Target],
+  ['Content Intelligence', '/content-intelligence', BrainCircuit],
+  ['Idea Qualification', '/ideas', Lightbulb],
+  ['Research & Evidence', '/research', FileSearch],
   ['Image Workspace', '/visuals/image-generator', ImageIcon],
   ['Generation Queue', '/visuals/generation/queue', Boxes],
   ['Storyboard Workspace', '/storyboard/storyboard-editor', Sparkles],
@@ -94,8 +99,10 @@ export default function ControlRoomLandingPage() {
 
   return <div className={styles.content}>
     <p className={styles.eyebrow}>AUTONOMOUS MEDIA STUDIO</p>
-    <h1>Visual Intelligence Control Room</h1>
-    <p className={styles.subtitle}>Live production state, quality signals, and asset delivery across the CACSMS image pipeline.</p>
+    <h1>CACSMS Control Room</h1>
+    <p className={styles.subtitle}>
+      Content lifecycle command centres, live visual production state, quality signals, and asset delivery across CACSMS.
+    </p>
 
     <section className={styles.controlBar}>
       <div className={styles.status}><span className={data?.system.isHealthy ? styles.liveDot : styles.warningDot}/><strong>{data?.system.isHealthy ? 'Operational' : 'Unavailable'}</strong><b>•</b>{titleCase(controlState)}</div>
@@ -139,6 +146,7 @@ export default function ControlRoomLandingPage() {
 
     <div className={styles.lowerGrid}>
       <div className={styles.leftColumn}>
+        <ContentLifecyclePanel />
         <ControlRoomLifecycleStrip queue={data?.queue} activeWorkflowIndex={activeGroup} />
 
         <div className={styles.dataGrid}>

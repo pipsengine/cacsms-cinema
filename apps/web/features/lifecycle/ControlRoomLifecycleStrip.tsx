@@ -36,7 +36,7 @@ function ControlRoomLifecycleStripInner() {
       <section className={`${styles.panel} ${styles.lifecycle}`}>
         <div className={styles.sectionHead}>
           <h2>
-            <Zap size={19} /> Autonomous Production Lifecycle
+            <Zap size={19} /> Visual Production Lifecycle
           </h2>
           <Link href={withContextQuery(selectedStage.overviewHref, {
             ...context,
@@ -75,7 +75,7 @@ export function ControlRoomLifecycleStrip({
       fallback={
         <section className={`${styles.panel} ${styles.lifecycle}`}>
           <div className={styles.sectionHead}>
-            <h2>Autonomous Production Lifecycle</h2>
+            <h2>Visual Production Lifecycle</h2>
           </div>
         </section>
       }

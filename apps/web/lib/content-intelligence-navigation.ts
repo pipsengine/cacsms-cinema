@@ -1,0 +1,23 @@
+export const contentIntelligenceNavigation = [
+  { id: 'ci-overview', label: 'Overview', href: '/content-intelligence' },
+  { id: 'ci-sources', label: 'Source Registry', href: '/content-intelligence/sources' },
+  { id: 'ci-discovery', label: 'Discovery Runs', href: '/content-intelligence/discovery' },
+  { id: 'ci-trends', label: 'Trend Intelligence', href: '/content-intelligence/trends' },
+  { id: 'ci-audience', label: 'Audience Demand', href: '/content-intelligence/audience-demand' },
+  { id: 'ci-gaps', label: 'Knowledge Gaps', href: '/content-intelligence/knowledge-gaps' },
+  {
+    id: 'ci-topics',
+    label: 'Topic Opportunities',
+    href: '/content-intelligence/topic-opportunities',
+  },
+  { id: 'ci-competitors', label: 'Competitor Intelligence', href: '/content-intelligence/competitors' },
+  { id: 'ci-candidates', label: 'Candidate Ideas', href: '/content-intelligence/candidates' },
+  { id: 'ci-verification', label: 'Evidence Verification', href: '/content-intelligence/verification' },
+  { id: 'ci-duplicates', label: 'Duplicate Detection', href: '/content-intelligence/duplicates' },
+  { id: 'ci-scoring', label: 'Opportunity Scoring', href: '/content-intelligence/scoring' },
+  { id: 'ci-ranking', label: 'Ranking & Selection', href: '/content-intelligence/ranking' },
+  { id: 'ci-portfolio', label: 'Portfolio Balance', href: '/content-intelligence/portfolio' },
+  { id: 'ci-handoffs', label: 'Qualification Handoffs', href: '/content-intelligence/handoffs' },
+  { id: 'ci-failures', label: 'Failure & Recovery', href: '/content-intelligence/failures' },
+  { id: 'ci-audit', label: 'Intelligence Audit', href: '/content-intelligence/audit' },
+] as const;

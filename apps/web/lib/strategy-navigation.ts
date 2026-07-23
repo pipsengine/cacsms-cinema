@@ -1,0 +1,23 @@
+export const strategyNavigation = [
+  { id: 'strategy-overview', label: 'Strategy Overview', href: '/strategy' },
+  { id: 'strategy-objectives', label: 'Strategic Objectives', href: '/strategy/objectives' },
+  { id: 'strategy-domains', label: 'Field & Domain Profiles', href: '/strategy/domains' },
+  { id: 'strategy-taxonomy', label: 'Subject & Subfield Taxonomy', href: '/strategy/taxonomy' },
+  { id: 'strategy-geographies', label: 'Country & Regional Profiles', href: '/strategy/geographies' },
+  { id: 'strategy-audiences', label: 'Audience Profiles', href: '/strategy/audiences' },
+  { id: 'strategy-editorial', label: 'Editorial & Brand Policy', href: '/strategy/editorial-policy' },
+  { id: 'strategy-formats', label: 'Content Format Strategy', href: '/strategy/formats' },
+  { id: 'strategy-channels', label: 'Channel Strategy', href: '/strategy/channels' },
+  { id: 'strategy-localisation', label: 'Language & Localisation', href: '/strategy/localisation' },
+  { id: 'strategy-source', label: 'Evidence & Source Policy', href: '/strategy/source-policy' },
+  { id: 'strategy-risk', label: 'Risk & Sensitivity Policy', href: '/strategy/risk-policy' },
+  {
+    id: 'strategy-thresholds',
+    label: 'Autonomous Selection Thresholds',
+    href: '/strategy/selection-thresholds',
+  },
+  { id: 'strategy-portfolio', label: 'Portfolio Allocation', href: '/strategy/portfolio' },
+  { id: 'strategy-validation', label: 'Strategy Validation', href: '/strategy/validation' },
+  { id: 'strategy-versions', label: 'Strategy Versions', href: '/strategy/versions' },
+  { id: 'strategy-audit', label: 'Strategy Audit', href: '/strategy/audit' },
+] as const;

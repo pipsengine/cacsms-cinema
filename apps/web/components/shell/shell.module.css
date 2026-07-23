@@ -1,24 +1,24 @@
 .shell {
   min-height: 100vh;
-  background: #fafbfe;
+  background: #f6f8fc;
 }
 
 .sidebarFallback {
   position: fixed;
   inset: 0 auto 0 0;
-  width: var(--sidebar-width, 372px);
+  width: var(--sidebar-width, 390px);
   background: #fff;
-  border-right: 1px solid #e6e8ef;
+  border-right: 1px solid #dde3ed;
 }
 
 .content {
   min-height: 100vh;
-  margin-left: var(--sidebar-width, 372px);
+  margin-left: var(--sidebar-width, 390px);
   transition: margin-left 0.22s ease;
 }
 
-.shell:has(.collapsed) .content {
-  margin-left: var(--sidebar-collapsed, 76px);
+.shell:has([data-collapsed='true']) .content {
+  margin-left: var(--sidebar-collapsed, 82px);
 }
 
 @media (max-width: 900px) {
@@ -27,7 +27,7 @@
     padding-top: 68px;
   }
 
-  .shell:has(.collapsed) .content {
+  .shell:has([data-collapsed='true']) .content {
     margin-left: 0;
   }
 }
