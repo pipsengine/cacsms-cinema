@@ -1,8 +1,13 @@
 import { createHash, randomUUID } from 'crypto';
 import { prisma } from '@/lib/db';
-import { REQUIRED_SECTIONS } from './contracts';
+import { REQUIRED_SECTIONS, isMutableStrategyStatus, type SectionKey } from './contracts';
+import { OBJECTIVES_POLICY } from './objectives-policy';
+import { DOMAINS_POLICY } from './domains-policy';
+import { StrategyRepository } from './repository';
 
 export class StrategyService {
+  private readonly repo = new StrategyRepository();
+
   async validate(versionId: string, idempotencyKey?: string | null) {
     return prisma.$transaction(async (tx) => {
       if (idempotencyKey) {
@@ -192,5 +197,261 @@ export class StrategyService {
       },
       { isolationLevel: 'Serializable' },
     );
+  }
+
+  async startObjectivesRun(idempotencyKey: string) {
+    await this.repo.ensureDraft();
+    await this.repo.ensureAutonomyRunsTable();
+
+    const overview = await this.repo.overview();
+    if (!overview.versionId) throw new Error('No strategy version available');
+    if (!isMutableStrategyStatus(overview.status)) {
+      throw new Error('Activated strategy history is immutable; stop requires a mutable version');
+    }
+
+    const versionId = overview.versionId;
+    const section: SectionKey = 'objectives';
+
+    const existing = await prisma.$queryRaw<Array<{ id: string; status: string }>>`
+      SELECT CONVERT(varchar(36), id) AS id, status
+      FROM strategy_autonomy_runs
+      WHERE idempotency_key = ${idempotencyKey}
+    `;
+    if (existing[0]) {
+      return { runId: existing[0].id, status: existing[0].status };
+    }
+
+    const active = await prisma.$queryRaw<Array<{ id: string; status: string }>>`
+      SELECT TOP 1 CONVERT(varchar(36), id) AS id, status
+      FROM strategy_autonomy_runs
+      WHERE version_id = CONVERT(uniqueidentifier, ${versionId})
+        AND section_key = ${section}
+        AND status IN ('QUEUED', 'RUNNING')
+      ORDER BY created_at DESC
+    `;
+    if (active[0]) {
+      return { runId: active[0].id, status: active[0].status };
+    }
+
+    const runId = randomUUID();
+    await prisma.$executeRaw`
+      INSERT INTO strategy_autonomy_runs(
+        id, version_id, section_key, idempotency_key, status, started_at
+      )
+      VALUES (
+        CONVERT(uniqueidentifier, ${runId}),
+        CONVERT(uniqueidentifier, ${versionId}),
+        ${section},
+        ${idempotencyKey},
+        ${'RUNNING'},
+        sysutcdatetime()
+      )
+    `;
+    await prisma.$executeRaw`
+      INSERT INTO strategy_audit_events(version_id, action, actor_type, request_id, reason)
+      VALUES (
+        CONVERT(uniqueidentifier, ${versionId}),
+        ${'OBJECTIVES_AUTONOMY_STARTED'},
+        ${'SYSTEM'},
+        ${idempotencyKey},
+        ${'Human start; system generates policy objectives without form input'}
+      )
+    `;
+
+    return this.executeObjectivesRun(runId, versionId);
+  }
+
+  async stopObjectivesRun(runId?: string | null) {
+    await this.repo.ensureAutonomyRunsTable();
+    const overview = await this.repo.overview();
+    if (!overview.versionId) throw new Error('No strategy version available');
+
+    const target =
+      runId ||
+      (
+        await prisma.$queryRaw<Array<{ id: string }>>`
+          SELECT TOP 1 CONVERT(varchar(36), id) AS id
+          FROM strategy_autonomy_runs
+          WHERE version_id = CONVERT(uniqueidentifier, ${overview.versionId})
+            AND section_key = ${'objectives'}
+            AND status IN ('QUEUED', 'RUNNING')
+          ORDER BY created_at DESC
+        `
+      )[0]?.id;
+
+    if (!target) {
+      return { runId: null, status: 'IDLE' as const };
+    }
+
+    await prisma.$executeRaw`
+      UPDATE strategy_autonomy_runs
+      SET
+        cancel_requested = 1,
+        updated_at = sysutcdatetime()
+      WHERE id = CONVERT(uniqueidentifier, ${target})
+        AND status IN ('QUEUED', 'RUNNING')
+    `;
+    await prisma.$executeRaw`
+      INSERT INTO strategy_audit_events(version_id, action, actor_type, reason)
+      VALUES (
+        CONVERT(uniqueidentifier, ${overview.versionId}),
+        ${'OBJECTIVES_AUTONOMY_STOP_REQUESTED'},
+        ${'DEVELOPMENT_USER'},
+        ${'Human stop'}
+      )
+    `;
+
+    return { runId: target, status: 'STOP_REQUESTED' as const };
+  }
+
+  /** Reconcile Field & Domain Profiles from system policy (no fabricated metrics). */
+  async reconcileDomains(versionId?: string) {
+    await this.repo.ensureDraft();
+    const overview = await this.repo.overview();
+    const targetVersionId = versionId ?? overview.versionId;
+    if (!targetVersionId) throw new Error('No strategy version available');
+    if (!isMutableStrategyStatus(overview.status) && !versionId) {
+      throw new Error('Activated strategy history is immutable');
+    }
+
+    const existing = await this.repo.list(targetVersionId, 'domains');
+    // Replace generic section stubs with detailed domain policy profiles.
+    for (const record of existing) {
+      const key = String(record.configuration?.systemKey ?? '');
+      if (key === 'policy.domains' && record.id) {
+        await this.repo.update(targetVersionId, 'domains', record.id, {
+          name: record.name,
+          description: record.description ?? '',
+          status: 'ARCHIVED',
+          priority: record.priority,
+          configuration: { ...record.configuration, archivedReason: 'Superseded by domain policy profiles' },
+          effectiveFrom: record.effectiveFrom ?? null,
+          effectiveTo: record.effectiveTo ?? null,
+        });
+      }
+    }
+
+    const live = (await this.repo.list(targetVersionId, 'domains')).filter(
+      (record) => record.status !== 'ARCHIVED',
+    );
+    const byKey = new Map(
+      live
+        .map((record) => [String(record.configuration?.systemKey ?? ''), record] as const)
+        .filter(([key]) => Boolean(key)),
+    );
+
+    let created = 0;
+    let updated = 0;
+    for (const policy of DOMAINS_POLICY) {
+      const systemKey = String(policy.configuration.systemKey);
+      const prior = byKey.get(systemKey);
+      if (prior?.id) {
+        await this.repo.update(targetVersionId, 'domains', prior.id, {
+          ...policy,
+          id: prior.id,
+        });
+        updated += 1;
+      } else {
+        const record = await this.repo.create(targetVersionId, 'domains', policy);
+        if (record.id) byKey.set(systemKey, record);
+        created += 1;
+      }
+    }
+
+    await prisma.$executeRaw`
+      INSERT INTO strategy_audit_events(version_id, action, actor_type, new_value, reason)
+      VALUES (
+        CONVERT(uniqueidentifier, ${targetVersionId}),
+        ${'DOMAINS_POLICY_RECONCILED'},
+        ${'SYSTEM'},
+        ${JSON.stringify({ created, updated, policyCount: DOMAINS_POLICY.length })},
+        ${'Field & domain profiles reconciled from system policy; no coverage metrics fabricated'}
+      )
+    `;
+
+    return { created, updated, total: DOMAINS_POLICY.length };
+  }
+
+  private async executeObjectivesRun(runId: string, versionId: string) {
+    let created = 0;
+    let updated = 0;
+    let cancelled = false;
+
+    try {
+      const existing = await this.repo.list(versionId, 'objectives');
+      const byKey = new Map(
+        existing
+          .map((record) => [String(record.configuration?.systemKey ?? ''), record] as const)
+          .filter(([key]) => Boolean(key)),
+      );
+
+      for (const policy of OBJECTIVES_POLICY) {
+        const flags = await prisma.$queryRaw<Array<{ cancelRequested: boolean | number }>>`
+          SELECT cancel_requested AS cancelRequested
+          FROM strategy_autonomy_runs
+          WHERE id = CONVERT(uniqueidentifier, ${runId})
+        `;
+        if (flags[0] && Boolean(flags[0].cancelRequested)) {
+          cancelled = true;
+          break;
+        }
+
+        const systemKey = String(policy.configuration.systemKey);
+        const prior = byKey.get(systemKey);
+        if (prior?.id) {
+          await this.repo.update(versionId, 'objectives', prior.id, {
+            ...policy,
+            id: prior.id,
+          });
+          updated += 1;
+        } else {
+          const record = await this.repo.create(versionId, 'objectives', policy);
+          if (record.id) byKey.set(systemKey, record);
+          created += 1;
+        }
+      }
+
+      const summary = JSON.stringify({
+        created,
+        updated,
+        policyCount: OBJECTIVES_POLICY.length,
+        metricsFabricated: false,
+      });
+      const status = cancelled ? 'CANCELLED' : 'COMPLETED';
+
+      await prisma.$executeRaw`
+        UPDATE strategy_autonomy_runs
+        SET
+          status = ${status},
+          summary_json = ${summary},
+          completed_at = sysutcdatetime(),
+          updated_at = sysutcdatetime()
+        WHERE id = CONVERT(uniqueidentifier, ${runId})
+      `;
+      await prisma.$executeRaw`
+        INSERT INTO strategy_audit_events(version_id, action, actor_type, new_value, reason)
+        VALUES (
+          CONVERT(uniqueidentifier, ${versionId}),
+          ${cancelled ? 'OBJECTIVES_AUTONOMY_CANCELLED' : 'OBJECTIVES_AUTONOMY_COMPLETED'},
+          ${'SYSTEM'},
+          ${summary},
+          ${cancelled ? 'Stopped by human' : 'Policy objectives reconciled; baselines remain UNMEASURED'}
+        )
+      `;
+
+      return { runId, status, created, updated };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Objectives autonomy failed';
+      await prisma.$executeRaw`
+        UPDATE strategy_autonomy_runs
+        SET
+          status = ${'FAILED'},
+          failure_reason = ${message},
+          completed_at = sysutcdatetime(),
+          updated_at = sysutcdatetime()
+        WHERE id = CONVERT(uniqueidentifier, ${runId})
+      `;
+      throw error;
+    }
   }
 }

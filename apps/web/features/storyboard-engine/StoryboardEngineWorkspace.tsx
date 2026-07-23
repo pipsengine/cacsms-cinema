@@ -2,7 +2,6 @@
 
 import { useMemo, useState } from 'react';
 import { Info, LayoutGrid } from 'lucide-react';
-import { AutonomyControlBar } from './components/AutonomyControlBar';
 import { PipelineTimeline } from './components/PipelineTimeline';
 import { ShotBoard } from './components/ShotBoard';
 import { ShotDetailPanel } from './components/ShotDetailPanel';
@@ -53,13 +52,6 @@ export function StoryboardEngineWorkspace() {
     setToast(null);
   }
 
-  function onControl(action: 'start' | 'pause' | 'resume' | 'stop' | 'emergency_stop') {
-    // Frontend-only: do not simulate execution. Surface integration intent.
-    setToast(
-      `“${action.replaceAll('_', ' ')}” is ready to bind to storyboard autonomy APIs. No workflow was started or altered.`,
-    );
-  }
-
   return (
     <div className={styles.content}>
       <StoryboardHeader
@@ -82,7 +74,9 @@ export function StoryboardEngineWorkspace() {
         </aside>
       ) : null}
 
-      <AutonomyControlBar autonomy={model.autonomy} onAction={onControl} />
+      <p className={styles.observeNote}>
+        Observe-only. Start or stop the entire system from the Control Room or top bar.
+      </p>
       <SummaryMetrics summary={model.summary} />
       <PipelineTimeline stages={model.pipeline} />
 

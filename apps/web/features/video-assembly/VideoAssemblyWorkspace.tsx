@@ -2,7 +2,6 @@
 
 import { useMemo, useState } from 'react';
 import { Film, Info } from 'lucide-react';
-import { AutonomyControlBar } from './components/AutonomyControlBar';
 import { PipelineTimeline } from './components/PipelineTimeline';
 import { SummaryMetrics } from './components/SummaryMetrics';
 import { ClipDetailPanel, TimelineBoard } from './components/TimelineBoard';
@@ -53,12 +52,6 @@ export function VideoAssemblyWorkspace() {
     setToast(null);
   }
 
-  function onControl(action: 'start' | 'pause' | 'resume' | 'stop' | 'emergency_stop') {
-    setToast(
-      `“${action.replaceAll('_', ' ')}” is ready to bind to video assembly APIs. No workflow was started or altered.`,
-    );
-  }
-
   const title =
     provenance === 'presentation' && model.summary.title
       ? model.summary.title
@@ -87,7 +80,9 @@ export function VideoAssemblyWorkspace() {
         </aside>
       ) : null}
 
-      <AutonomyControlBar autonomy={model.autonomy} onAction={onControl} />
+      <p className={styles.observeNote}>
+        Observe-only. Start or stop the entire system from the Control Room or top bar.
+      </p>
       <SummaryMetrics summary={model.summary} />
       <PipelineTimeline stages={model.pipeline} />
 

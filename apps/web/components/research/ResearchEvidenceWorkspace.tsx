@@ -21,7 +21,6 @@ export function ResearchEvidenceWorkspace({ sectionKey }: { sectionKey?: Section
   const [items, setItems] = useState<ResearchRecord[]>([]);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(true);
-  const [actionError, setActionError] = useState('');
   const section = sectionKey ? getSection(sectionKey) : undefined;
 
   async function load() {
@@ -48,26 +47,6 @@ export function ResearchEvidenceWorkspace({ sectionKey }: { sectionKey?: Section
     return () => window.clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional sectionKey trigger
   }, [sectionKey]);
-
-  async function handleConsumeIntake() {
-    setActionError('');
-    try {
-      await researchApi.consumeIntake();
-      await load();
-    } catch (err) {
-      setActionError(err instanceof Error ? err.message : 'Intake consume failed');
-    }
-  }
-
-  async function handleStartRun() {
-    setActionError('');
-    try {
-      await researchApi.run();
-      await load();
-    } catch (err) {
-      setActionError(err instanceof Error ? err.message : 'Failed to start research run');
-    }
-  }
 
   if (busy) {
     return (
@@ -177,22 +156,13 @@ export function ResearchEvidenceWorkspace({ sectionKey }: { sectionKey?: Section
           </p>
         </div>
         <div className={styles.toolbar}>
-          {overview.intake?.status !== 'ACKNOWLEDGED' ? (
-            <button type="button" className={styles.primary} onClick={() => void handleConsumeIntake()}>
-              Consume IQ intake
-            </button>
-          ) : null}
-          <button
-            type="button"
-            className={styles.primary}
-            disabled={overview.intake?.status !== 'ACKNOWLEDGED'}
-            onClick={() => void handleStartRun()}
-          >
-            Start research run
-          </button>
+          <span className={styles.badge}>{overview.run?.status ?? 'NOT STARTED'}</span>
         </div>
       </header>
-      {actionError ? <p className={styles.empty}>{actionError}</p> : null}
+      <p className={styles.empty}>
+        Observe-only. Start or stop the full system from the Control Room or top bar. This stage
+        advances automatically while the system is Running.
+      </p>
       <section className={styles.hero}>
         <div>
           <span className={styles.badge}>{overview.run?.status ?? 'NOT STARTED'}</span>

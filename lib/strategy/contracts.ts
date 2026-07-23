@@ -12,6 +12,11 @@ export const StrategyStatus = z.enum([
 ]);
 export type StrategyStatus = z.infer<typeof StrategyStatus>;
 
+/** Versions that still accept section record mutations (activation locks ACTIVE). */
+export function isMutableStrategyStatus(status?: string | null): boolean {
+  return status === 'DRAFT' || status === 'INVALID' || status === 'READY' || status === 'IN_REVIEW';
+}
+
 export const SectionKey = z.enum([
   'objectives',
   'domains',
@@ -90,4 +95,17 @@ export type StrategyOverview = {
     message: string;
     recommendation: string;
   }>;
+  autonomyRun?: StrategyAutonomyRun | null;
+};
+
+export type StrategyAutonomyRun = {
+  id: string;
+  sectionKey: SectionKey;
+  status: 'QUEUED' | 'RUNNING' | 'COMPLETED' | 'PARTIAL' | 'FAILED' | 'CANCELLED';
+  cancelRequested: boolean;
+  summary?: Record<string, unknown> | null;
+  failureReason?: string | null;
+  startedAt?: string | null;
+  completedAt?: string | null;
+  createdAt: string;
 };

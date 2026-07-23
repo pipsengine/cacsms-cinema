@@ -21,7 +21,6 @@ export function IntelligenceWorkspace({ sectionKey }: { sectionKey?: SectionKey 
   const [items, setItems] = useState<Opportunity[]>([]);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(true);
-  const [actionError, setActionError] = useState('');
   const section = sectionKey ? getSection(sectionKey) : undefined;
 
   async function load() {
@@ -48,26 +47,6 @@ export function IntelligenceWorkspace({ sectionKey }: { sectionKey?: SectionKey 
     return () => window.clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional sectionKey trigger
   }, [sectionKey]);
-
-  async function handleConsumeStrategy() {
-    setActionError('');
-    try {
-      await intelligenceApi.consumeActiveStrategy();
-      await load();
-    } catch (err) {
-      setActionError(err instanceof Error ? err.message : 'Strategy consume failed');
-    }
-  }
-
-  async function handleStartRun() {
-    setActionError('');
-    try {
-      await intelligenceApi.run();
-      await load();
-    } catch (err) {
-      setActionError(err instanceof Error ? err.message : 'Failed to start discovery run');
-    }
-  }
 
   if (busy) {
     return (
@@ -174,22 +153,13 @@ export function IntelligenceWorkspace({ sectionKey }: { sectionKey?: SectionKey 
           </p>
         </div>
         <div className={styles.toolbar}>
-          {overview.strategy?.status !== 'ACKNOWLEDGED' ? (
-            <button type="button" className={styles.primary} onClick={() => void handleConsumeStrategy()}>
-              Consume active strategy
-            </button>
-          ) : null}
-          <button
-            type="button"
-            className={styles.primary}
-            disabled={overview.strategy?.status !== 'ACKNOWLEDGED'}
-            onClick={() => void handleStartRun()}
-          >
-            Start discovery run
-          </button>
+          <span className={styles.badge}>{overview.run?.status ?? 'NOT STARTED'}</span>
         </div>
       </header>
-      {actionError ? <p className={styles.empty}>{actionError}</p> : null}
+      <p className={styles.empty}>
+        Observe-only. Start or stop the full system from the Control Room or top bar. This stage
+        advances automatically while the system is Running.
+      </p>
       <section className={styles.hero}>
         <div>
           <span className={styles.badge}>{overview.run?.status ?? 'NOT STARTED'}</span>

@@ -27,6 +27,11 @@ export const strategyApi = {
       method: 'POST',
       body: JSON.stringify(data),
     }),
+  update: (versionId: string, section: SectionKey, recordId: string, data: StrategyRecord) =>
+    request<StrategyRecord>(`/strategy/versions/${versionId}/${section}/${recordId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    }),
   validate: (versionId: string) =>
     request(`/strategy/versions/${versionId}/validate`, {
       method: 'POST',
@@ -36,6 +41,20 @@ export const strategyApi = {
     request(`/strategy/versions/${versionId}/activate`, {
       method: 'POST',
       headers: { 'idempotency-key': crypto.randomUUID() },
+    }),
+  startObjectivesRun: () =>
+    request<{ runId: string; status: string; created?: number; updated?: number }>(
+      '/strategy/objectives/runs',
+      {
+        method: 'POST',
+        body: '{}',
+        headers: { 'idempotency-key': crypto.randomUUID() },
+      },
+    ),
+  stopObjectivesRun: (runId?: string) =>
+    request<{ runId: string | null; status: string }>('/strategy/objectives/runs/stop', {
+      method: 'POST',
+      body: JSON.stringify({ runId }),
     }),
   audit: (versionId: string) =>
     request<

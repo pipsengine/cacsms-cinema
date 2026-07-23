@@ -28,6 +28,21 @@ type AuditEvent = {
   reason: string | null;
 };
 
+function statusTone(status?: string) {
+  switch (status) {
+    case 'ACTIVE':
+    case 'READY':
+      return styles.toneReady;
+    case 'INVALID':
+    case 'BLOCKED':
+      return styles.toneBlocked;
+    case 'IN_REVIEW':
+      return styles.toneWarning;
+    default:
+      return styles.toneDraft;
+  }
+}
+
 export function OperationalWorkspace({ mode }: { mode: keyof typeof copy }) {
   const [overview, setOverview] = useState<StrategyOverview | null>(null);
   const [events, setEvents] = useState<AuditEvent[]>([]);
@@ -51,43 +66,46 @@ export function OperationalWorkspace({ mode }: { mode: keyof typeof copy }) {
       void load();
     }, 0);
     return () => window.clearTimeout(timer);
-    // Reload when the operational mode changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional mode trigger
   }, [mode]);
 
   return (
     <main className={styles.page}>
-      <header className={styles.header}>
+      <header className={styles.top}>
         <div>
           <p className={styles.crumb}>Strategy & Fields / {title}</p>
-          <h1>{title}</h1>
-          <p>{description}</p>
+          <h1 className={styles.title}>{title}</h1>
+          <p className={styles.lede}>{description}</p>
         </div>
-        {overview?.status ? <span className={styles.badge}>{overview.status}</span> : null}
+        {overview?.status ? (
+          <span className={`${styles.badge} ${statusTone(overview.status)}`}>{overview.status}</span>
+        ) : null}
       </header>
+
       {error ? (
         <section className={styles.unavailable}>
           <h2>Service unavailable</h2>
           <p>{error}</p>
         </section>
       ) : !overview ? (
-        <div className={styles.skeleton} />
+        <div className={styles.skeletonPanel} />
       ) : (
-        <section className={styles.panel}>
+        <section className={styles.sidePanel}>
           {mode === 'validation' ? (
             <>
               <h2>Latest validation</h2>
-              <p>Last checked: {overview.lastValidatedAt ?? 'Not yet validated'}</p>
-              <p>
+              <p className={styles.lede}>
+                Last checked: {overview.lastValidatedAt ?? 'Not yet validated'}
+              </p>
+              <p className={styles.lede}>
                 Readiness: {overview.readiness}% · Failed mandatory sections:{' '}
                 {overview.metrics?.failedMandatoryValidations ?? 0}
               </p>
               {overview.versionId ? (
                 <button
                   type="button"
-                  onClick={() =>
-                    void strategyApi.validate(overview.versionId!).then(() => load())
-                  }
+                  className={styles.primary}
+                  onClick={() => void strategyApi.validate(overview.versionId!).then(() => load())}
                 >
                   Run validation
                 </button>
@@ -97,23 +115,24 @@ export function OperationalWorkspace({ mode }: { mode: keyof typeof copy }) {
           {mode === 'versions' ? (
             <>
               <h2>Current version</h2>
-              <p>
+              <p className={styles.lede}>
                 {overview.name} · Version {overview.versionNumber} · {overview.status}
               </p>
-              <p>
-                Activated history is immutable. Rollback creates a new draft from a selected
-                historical version.
+              <p className={styles.lede}>
+                Activated history is immutable. Rollback creates a new draft from a selected historical
+                version.
               </p>
             </>
           ) : null}
           {mode === 'audit' ? (
             <>
               <h2>Recent strategy evidence</h2>
-              <p>
-                Current package checksum: <code>{overview.checksum ?? 'Not generated'}</code>
+              <p className={styles.checksum}>
+                Current package checksum
+                <code>{overview.checksum ?? 'Not generated'}</code>
               </p>
               {events.length ? (
-                <div className={styles.tableWrap}>
+                <div className={styles.tableShell}>
                   <table>
                     <thead>
                       <tr>
@@ -136,7 +155,7 @@ export function OperationalWorkspace({ mode }: { mode: keyof typeof copy }) {
                   </table>
                 </div>
               ) : (
-                <p>No audit events yet for this version.</p>
+                <p className={styles.noIssues}>No audit events yet for this version.</p>
               )}
             </>
           ) : null}

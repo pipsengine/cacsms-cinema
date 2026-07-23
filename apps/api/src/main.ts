@@ -1,5 +1,6 @@
 import { prisma } from '../../../lib/db';
 import { JobOrchestrator } from '../../../lib/job-orchestrator';
+import { ContentLifecycleOrchestrator } from '../../../lib/content-lifecycle-orchestrator';
 import { registerAutonomousStageHandlers } from '../../../lib/autonomous-stage-handlers';
 
 const POLL_INTERVAL_MS = Number(process.env.WORKER_POLL_INTERVAL_MS || 1000);
@@ -23,13 +24,19 @@ async function runWorker() {
   try {
     const { recoverActiveWorkflowRuns } = await import('../../../lib/visual-workflow/service');
     const recovered = await recoverActiveWorkflowRuns();
-    if (recovered > 0) console.log(`Recovered ${recovered} interrupted visual workflow run(s) from checkpoint.`);
+    if (recovered > 0) {
+      console.log(`Recovered ${recovered} interrupted visual workflow run(s) from checkpoint.`);
+    }
   } catch (error) {
-    console.error('Visual workflow recovery on startup failed:', error instanceof Error ? error.message : error);
+    console.error(
+      'Visual workflow recovery on startup failed:',
+      error instanceof Error ? error.message : error,
+    );
   }
-  console.log('Background worker listening for jobs...');
+  console.log('Background worker listening for lifecycle + jobs...');
 
   while (isRunning) {
+    await ContentLifecycleOrchestrator.tick();
     await JobOrchestrator.pollAndProcessJobs();
     if (isRunning) await delay(POLL_INTERVAL_MS);
   }

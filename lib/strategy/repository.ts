@@ -2,7 +2,9 @@ import { randomUUID } from 'crypto';
 import { prisma } from '@/lib/db';
 import {
   REQUIRED_SECTIONS,
+  isMutableStrategyStatus,
   type SectionKey,
+  type StrategyAutonomyRun,
   type StrategyOverview,
   type StrategyRecord,
   type StrategyStatus,
@@ -26,7 +28,53 @@ function labelForSection(key: string) {
   return key.replace(/-/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
+function asSqlDate(value: string | null | undefined): Date | null {
+  if (!value) return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+/** Bind nullable datetimes as nvarchar so MSSQL never sees typed NULL as int. */
+function asDateParam(value: string | null | undefined): string {
+  const date = asSqlDate(value);
+  return date ? date.toISOString() : '';
+}
+
 export class StrategyRepository {
+  async ensureAutonomyRunsTable(): Promise<void> {
+    await prisma.$executeRaw`
+      IF OBJECT_ID(N'[dbo].[strategy_autonomy_runs]', N'U') IS NULL
+      BEGIN
+        CREATE TABLE [dbo].[strategy_autonomy_runs] (
+          [id] uniqueidentifier NOT NULL,
+          [version_id] uniqueidentifier NOT NULL,
+          [section_key] varchar(40) NOT NULL,
+          [idempotency_key] varchar(100) NOT NULL,
+          [status] varchar(30) NOT NULL,
+          [cancel_requested] bit NOT NULL CONSTRAINT [strategy_autonomy_runs_cancel_df] DEFAULT 0,
+          [summary_json] nvarchar(max) NULL,
+          [failure_reason] nvarchar(2000) NULL,
+          [started_at] datetime2 NULL,
+          [completed_at] datetime2 NULL,
+          [created_at] datetime2 NOT NULL CONSTRAINT [strategy_autonomy_runs_created_at_df] DEFAULT sysutcdatetime(),
+          [updated_at] datetime2 NOT NULL CONSTRAINT [strategy_autonomy_runs_updated_at_df] DEFAULT sysutcdatetime(),
+          CONSTRAINT [strategy_autonomy_runs_pkey] PRIMARY KEY CLUSTERED ([id]),
+          CONSTRAINT [strategy_autonomy_runs_version_id_fkey]
+            FOREIGN KEY ([version_id]) REFERENCES [dbo].[content_strategy_versions]([id]),
+          CONSTRAINT [UQ_strategy_autonomy_idempotency] UNIQUE ([idempotency_key]),
+          CONSTRAINT [CK_strategy_autonomy_runs_status] CHECK (
+            [status] IN ('QUEUED','RUNNING','COMPLETED','PARTIAL','FAILED','CANCELLED')
+          ),
+          CONSTRAINT [CK_strategy_autonomy_runs_summary_json] CHECK (
+            [summary_json] IS NULL OR ISJSON([summary_json]) = 1
+          )
+        );
+        CREATE INDEX [IX_strategy_autonomy_runs_section]
+          ON [dbo].[strategy_autonomy_runs]([version_id], [section_key], [created_at] DESC);
+      END
+    `;
+  }
+
   async ensureDraft(): Promise<void> {
     const existing = await prisma.$queryRaw<Array<{ id: string }>>`
       SELECT TOP 1 CONVERT(varchar(36), id) AS id
@@ -146,8 +194,16 @@ export class StrategyRepository {
         severity: 'CRITICAL',
         section: section.key,
         message: `Missing required configuration for ${section.label}`,
-        recommendation: 'Create at least one active record in this section',
+        recommendation: 'Start autonomous configuration for this section (human start/stop only)',
       }));
+
+    let autonomyRun: StrategyAutonomyRun | null = null;
+    try {
+      await this.ensureAutonomyRunsTable();
+      autonomyRun = await this.latestAutonomyRun(x.versionId, 'objectives');
+    } catch {
+      autonomyRun = null;
+    }
 
     return {
       available: true,
@@ -163,6 +219,7 @@ export class StrategyRepository {
       checksum: x.checksum,
       sections,
       issues,
+      autonomyRun,
       metrics: {
         configuredSections: sections.filter((section) => section.progress === 100).length,
         configuredRecords: Object.values(map).reduce((sum, value) => sum + value, 0),
@@ -201,22 +258,30 @@ export class StrategyRepository {
       ORDER BY priority DESC, record_name
     `;
 
-    return rows.map((row) => ({
-      id: row.id,
-      name: row.name,
-      description: '',
-      status: row.status,
-      priority: Number(row.priority),
-      configuration: JSON.parse(row.configuration || '{}') as Record<string, unknown>,
-      effectiveFrom: row.effectiveFrom?.toISOString() ?? null,
-      effectiveTo: row.effectiveTo?.toISOString() ?? null,
-      rowVersion: row.rowVersion ?? undefined,
-    }));
+    return rows.map((row) => {
+      const configuration = JSON.parse(row.configuration || '{}') as Record<string, unknown>;
+      return {
+        id: row.id,
+        name: row.name,
+        description: String(configuration.description ?? ''),
+        status: row.status,
+        priority: Number(row.priority),
+        configuration,
+        effectiveFrom: row.effectiveFrom?.toISOString() ?? null,
+        effectiveTo: row.effectiveTo?.toISOString() ?? null,
+        rowVersion: row.rowVersion ?? undefined,
+      };
+    });
   }
 
   async create(versionId: string, section: SectionKey, data: StrategyRecord): Promise<StrategyRecord> {
     const id = randomUUID();
-    const configJson = JSON.stringify(data.configuration ?? {});
+    const configJson = JSON.stringify({
+      ...(data.configuration ?? {}),
+      description: data.description ?? '',
+    });
+    const effectiveFrom = asDateParam(data.effectiveFrom);
+    const effectiveTo = asDateParam(data.effectiveTo);
 
     await prisma.$transaction(async (tx) => {
       const state = await tx.$queryRaw<Array<{ status: string }>>`
@@ -224,13 +289,14 @@ export class StrategyRepository {
         FROM content_strategy_versions WITH (UPDLOCK, HOLDLOCK)
         WHERE id = CONVERT(uniqueidentifier, ${versionId})
       `;
-      if (state[0]?.status !== 'DRAFT') {
-        throw new Error('Only draft versions can be edited');
+      if (!isMutableStrategyStatus(state[0]?.status)) {
+        throw new Error('Only draft, invalid, or ready versions can be edited');
       }
 
       await tx.$executeRaw`
         INSERT INTO strategy_records(
-          id, version_id, section_key, record_name, status, priority, configuration_json
+          id, version_id, section_key, record_name, status, priority, configuration_json,
+          effective_from, effective_to
         )
         VALUES (
           CONVERT(uniqueidentifier, ${id}),
@@ -239,7 +305,9 @@ export class StrategyRepository {
           ${data.name},
           ${data.status},
           ${data.priority},
-          ${configJson}
+          ${configJson},
+          TRY_CONVERT(datetime2, NULLIF(${effectiveFrom}, '')),
+          TRY_CONVERT(datetime2, NULLIF(${effectiveTo}, ''))
         )
       `;
       await tx.$executeRaw`
@@ -258,7 +326,125 @@ export class StrategyRepository {
       `;
     });
 
-    return { id, ...data };
+    return { id, ...data, configuration: JSON.parse(configJson) as Record<string, unknown> };
+  }
+
+  async update(
+    versionId: string,
+    section: SectionKey,
+    recordId: string,
+    data: StrategyRecord,
+  ): Promise<StrategyRecord> {
+    const configJson = JSON.stringify({
+      ...(data.configuration ?? {}),
+      description: data.description ?? '',
+    });
+    const effectiveFrom = asDateParam(data.effectiveFrom);
+    const effectiveTo = asDateParam(data.effectiveTo);
+
+    await prisma.$transaction(async (tx) => {
+      const state = await tx.$queryRaw<Array<{ status: string }>>`
+        SELECT status
+        FROM content_strategy_versions WITH (UPDLOCK, HOLDLOCK)
+        WHERE id = CONVERT(uniqueidentifier, ${versionId})
+      `;
+      if (!isMutableStrategyStatus(state[0]?.status)) {
+        throw new Error('Only draft, invalid, or ready versions can be edited');
+      }
+
+      const existing = await tx.$queryRaw<Array<{ id: string }>>`
+        SELECT CONVERT(varchar(36), id) AS id
+        FROM strategy_records WITH (UPDLOCK, HOLDLOCK)
+        WHERE id = CONVERT(uniqueidentifier, ${recordId})
+          AND version_id = CONVERT(uniqueidentifier, ${versionId})
+          AND section_key = ${section}
+          AND archived_at IS NULL
+      `;
+      if (!existing[0]) {
+        throw new Error('Strategy record not found');
+      }
+
+      await tx.$executeRaw`
+        UPDATE strategy_records
+        SET
+          record_name = ${data.name},
+          status = ${data.status},
+          priority = ${data.priority},
+          configuration_json = ${configJson},
+          effective_from = TRY_CONVERT(datetime2, NULLIF(${effectiveFrom}, '')),
+          effective_to = TRY_CONVERT(datetime2, NULLIF(${effectiveTo}, '')),
+          updated_at = sysutcdatetime()
+        WHERE id = CONVERT(uniqueidentifier, ${recordId})
+      `;
+      await tx.$executeRaw`
+        UPDATE content_strategy_versions
+        SET last_validated_at = NULL, updated_at = sysutcdatetime(), status = 'DRAFT'
+        WHERE id = CONVERT(uniqueidentifier, ${versionId})
+      `;
+      await tx.$executeRaw`
+        INSERT INTO strategy_audit_events(version_id, action, actor_type, new_value)
+        VALUES (
+          CONVERT(uniqueidentifier, ${versionId}),
+          ${'RECORD_UPDATED'},
+          ${'DEVELOPMENT_USER'},
+          ${configJson}
+        )
+      `;
+    });
+
+    return {
+      id: recordId,
+      ...data,
+      configuration: JSON.parse(configJson) as Record<string, unknown>,
+    };
+  }
+
+  async latestAutonomyRun(
+    versionId: string,
+    section: SectionKey,
+  ): Promise<StrategyAutonomyRun | null> {
+    const rows = await prisma.$queryRaw<
+      Array<{
+        id: string;
+        sectionKey: string;
+        status: string;
+        cancelRequested: boolean | number;
+        summaryJson: string | null;
+        failureReason: string | null;
+        startedAt: Date | null;
+        completedAt: Date | null;
+        createdAt: Date;
+      }>
+    >`
+      SELECT TOP 1
+        CONVERT(varchar(36), id) AS id,
+        section_key AS sectionKey,
+        status,
+        cancel_requested AS cancelRequested,
+        summary_json AS summaryJson,
+        failure_reason AS failureReason,
+        started_at AS startedAt,
+        completed_at AS completedAt,
+        created_at AS createdAt
+      FROM strategy_autonomy_runs
+      WHERE version_id = CONVERT(uniqueidentifier, ${versionId})
+        AND section_key = ${section}
+      ORDER BY created_at DESC
+    `;
+
+    const row = rows[0];
+    if (!row) return null;
+    return {
+      id: row.id,
+      sectionKey: row.sectionKey as SectionKey,
+      status: row.status as StrategyAutonomyRun['status'],
+      cancelRequested: Boolean(row.cancelRequested),
+      summary: row.summaryJson ? (JSON.parse(row.summaryJson) as Record<string, unknown>) : null,
+      failureReason: row.failureReason,
+      startedAt: row.startedAt?.toISOString() ?? null,
+      completedAt: row.completedAt?.toISOString() ?? null,
+      createdAt: row.createdAt.toISOString(),
+    };
   }
 
   async listAudit(versionId: string) {

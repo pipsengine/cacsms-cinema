@@ -1,7 +1,6 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { AutonomyControlBar } from './components/AutonomyControlBar';
 import { ImageGeneratorHeader } from './components/ImageGeneratorHeader';
 import { JobStageProgress } from './components/JobStageProgress';
 import { CandidatesPanel, JobDetailPanel, QueuePanel } from './components/WorkspacePanels';
@@ -25,14 +24,12 @@ export function ImageGeneratorWorkspace({
   focus?: 'all' | 'queue' | 'job' | 'candidates' | 'attempts' | 'failures';
 } = {}) {
   const [controlState, setControlState] = useState('UNAVAILABLE');
-  const [isHealthy, setIsHealthy] = useState(false);
   const [jobs, setJobs] = useState<JobRecord[]>([]);
   const [projects, setProjects] = useState<ProjectRecord[]>([]);
   const [selectedJobId, setSelectedJobId] = useState<string | null>(initialJobId);
   const [selectedCandidateId, setSelectedCandidateId] = useState<string | null>(null);
   const [projectId, setProjectId] = useState('');
   const [loading, setLoading] = useState(true);
-  const [controlBusy, setControlBusy] = useState(false);
   const [createBusy, setCreateBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -54,9 +51,7 @@ export function ImageGeneratorWorkspace({
       if (dashboardResponse.ok) {
         const dashboard = await dashboardResponse.json() as DashboardPayload;
         setControlState(dashboard.system.controlState);
-        setIsHealthy(dashboard.system.isHealthy);
       } else {
-        setIsHealthy(false);
         setControlState('UNAVAILABLE');
       }
 
@@ -94,36 +89,6 @@ export function ImageGeneratorWorkspace({
 
   const candidates = selectedJob?.candidates || [];
 
-  async function changeControl(action: 'start' | 'pause' | 'resume' | 'stop' | 'emergency_stop') {
-    setControlBusy(true);
-    setError(null);
-    try {
-      const response = await fetch('/api/v1/system/control', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Idempotency-Key': crypto.randomUUID(),
-          'X-Correlation-Id': crypto.randomUUID(),
-        },
-        body: JSON.stringify({
-          action,
-          reason:
-            action === 'emergency_stop'
-              ? 'Operator emergency stop from Image Generator'
-              : `Operator requested ${action} from Image Generator`,
-        }),
-      });
-      const result = await response.json();
-      if (!response.ok) throw new Error(result.error?.message ?? 'Control request failed.');
-      setNotice(`Worker control: ${action.replaceAll('_', ' ')}.`);
-      await refresh();
-    } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'Control request failed.');
-    } finally {
-      setControlBusy(false);
-    }
-  }
-
   async function createJob() {
     if (!projectId) {
       setError('Select a project before enqueueing a job.');
@@ -142,7 +107,7 @@ export function ImageGeneratorWorkspace({
       });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || 'Job creation failed.');
-      setNotice('Job enqueued at DISCOVER. Start the worker to advance stages.');
+      setNotice('Job enqueued at DISCOVER. It advances while the system is Running.');
       setSelectedJobId(result.id);
       setSelectedCandidateId(null);
       await refresh();
@@ -188,13 +153,10 @@ export function ImageGeneratorWorkspace({
         </aside>
       ) : null}
 
-      <AutonomyControlBar
-        controlState={controlState}
-        isHealthy={isHealthy}
-        selectedJob={selectedJob}
-        busy={controlBusy}
-        onAction={(action) => void changeControl(action)}
-      />
+      <p className={styles.observeNote}>
+        Observe-only workspace. Start or stop the entire system from the Control Room or top bar.
+        System state: <strong>{controlState}</strong>.
+      </p>
 
       <div className={styles.generatorWorkspace}>
         <QueuePanel

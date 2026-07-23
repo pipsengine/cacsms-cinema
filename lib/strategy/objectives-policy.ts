@@ -1,0 +1,148 @@
+import type { StrategyRecord } from './contracts';
+
+/**
+ * System policy objectives for Stage 01.
+ * Intent and scope only — baselines/targets stay UNMEASURED until real evidence exists.
+ */
+export type PolicyObjective = StrategyRecord & {
+  configuration: Record<string, unknown> & { systemKey: string; origin: 'SYSTEM_POLICY' };
+};
+
+export const OBJECTIVES_POLICY: PolicyObjective[] = [
+  {
+    name: 'Educational authority',
+    description:
+      'Establish CACSMS as a trusted source of verified educational content across priority domains.',
+    status: 'ACTIVE',
+    priority: 95,
+    configuration: {
+      systemKey: 'obj.educational-authority',
+      origin: 'SYSTEM_POLICY',
+      category: 'Authority',
+      desiredOutcome: 'Downstream stages prefer evidence-backed educational framing over speculative claims.',
+      targetMetric: 'Authority adherence rate (UNMEASURED)',
+      baselineValue: 'UNMEASURED',
+      targetValue: 'UNMEASURED',
+      measurementPeriod: 'Quarterly',
+      applicableFields: ['Education', 'Science', 'Public knowledge'],
+      applicableAudiences: ['Learners', 'Educators', 'General public'],
+      regions: ['Priority operating regions'],
+      channels: ['Owned distribution', 'Partner channels'],
+      formats: ['Short-form video', 'Explainer', 'Documentary segment'],
+      dependencies: ['editorial-policy', 'source-policy', 'risk-policy'],
+      constraints: 'No fabricated citations, metrics, or authority scores.',
+      successCriteria:
+        'Activated strategy package includes enforceable authority rules consumed by Content Intelligence.',
+    },
+    effectiveFrom: null,
+    effectiveTo: null,
+  },
+  {
+    name: 'Regional relevance',
+    description:
+      'Ensure content strategy encodes regional and localisation constraints before discovery begins.',
+    status: 'ACTIVE',
+    priority: 90,
+    configuration: {
+      systemKey: 'obj.regional-relevance',
+      origin: 'SYSTEM_POLICY',
+      category: 'Engagement',
+      desiredOutcome: 'Ideas and research runs respect geography and localisation policy.',
+      targetMetric: 'Localisation compliance rate (UNMEASURED)',
+      baselineValue: 'UNMEASURED',
+      targetValue: 'UNMEASURED',
+      measurementPeriod: 'Quarterly',
+      applicableFields: ['Localisation', 'Culture', 'Current affairs'],
+      applicableAudiences: ['Regional audiences'],
+      regions: ['Configured geographies'],
+      channels: ['Region-eligible channels'],
+      formats: ['Localised formats'],
+      dependencies: ['geographies', 'localisation', 'audiences'],
+      constraints: 'Do not invent country performance metrics.',
+      successCriteria: 'Geographies and localisation sections can be validated as mandatory strategy inputs.',
+    },
+    effectiveFrom: null,
+    effectiveTo: null,
+  },
+  {
+    name: 'Evidence integrity',
+    description:
+      'Require research-grade evidence gates so unqualified claims cannot progress in the lifecycle.',
+    status: 'ACTIVE',
+    priority: 92,
+    configuration: {
+      systemKey: 'obj.evidence-integrity',
+      origin: 'SYSTEM_POLICY',
+      category: 'Compliance',
+      desiredOutcome: 'Research & Evidence stage receives only ideas that declare evidence requirements.',
+      targetMetric: 'Evidence-backed progression rate (UNMEASURED)',
+      baselineValue: 'UNMEASURED',
+      targetValue: 'UNMEASURED',
+      measurementPeriod: 'Monthly',
+      applicableFields: ['All configured fields'],
+      applicableAudiences: ['All configured audiences'],
+      regions: ['All configured regions'],
+      channels: ['All configured channels'],
+      formats: ['All configured formats'],
+      dependencies: ['source-policy', 'risk-policy', 'selection-thresholds'],
+      constraints: 'Fail closed when evidence is missing; never fabricate evidence URLs or confidence scores.',
+      successCriteria: 'Selection thresholds and source policy exist before activation.',
+    },
+    effectiveFrom: null,
+    effectiveTo: null,
+  },
+  {
+    name: 'Audience fit',
+    description:
+      'Keep portfolio and format decisions aligned to declared audience profiles.',
+    status: 'ACTIVE',
+    priority: 85,
+    configuration: {
+      systemKey: 'obj.audience-fit',
+      origin: 'SYSTEM_POLICY',
+      category: 'Engagement',
+      desiredOutcome: 'Qualified ideas map to at least one active audience profile.',
+      targetMetric: 'Audience-mapped idea share (UNMEASURED)',
+      baselineValue: 'UNMEASURED',
+      targetValue: 'UNMEASURED',
+      measurementPeriod: 'Quarterly',
+      applicableFields: ['All configured fields'],
+      applicableAudiences: ['Configured audience profiles'],
+      regions: ['Audience-eligible regions'],
+      channels: ['Audience-eligible channels'],
+      formats: ['Audience-eligible formats'],
+      dependencies: ['audiences', 'formats', 'portfolio'],
+      constraints: 'Do not invent engagement or conversion percentages.',
+      successCriteria: 'Audience and format strategy records are present for validation.',
+    },
+    effectiveFrom: null,
+    effectiveTo: null,
+  },
+  {
+    name: 'Channel and format discipline',
+    description:
+      'Constrain generation to approved channels and formats so production stays policy-aligned.',
+    status: 'ACTIVE',
+    priority: 80,
+    configuration: {
+      systemKey: 'obj.channel-format-discipline',
+      origin: 'SYSTEM_POLICY',
+      category: 'Conversion',
+      desiredOutcome: 'Downstream stages only propose work inside approved channel/format pairs.',
+      targetMetric: 'In-policy channel/format adherence (UNMEASURED)',
+      baselineValue: 'UNMEASURED',
+      targetValue: 'UNMEASURED',
+      measurementPeriod: 'Monthly',
+      applicableFields: ['All configured fields'],
+      applicableAudiences: ['All configured audiences'],
+      regions: ['All configured regions'],
+      channels: ['Approved channels'],
+      formats: ['Approved formats'],
+      dependencies: ['channels', 'formats', 'editorial-policy'],
+      constraints: 'No speculative channel ROI figures.',
+      successCriteria: 'Channel and format sections contain at least one active record before READY.',
+    },
+    effectiveFrom: null,
+    effectiveTo: null,
+  },
+];

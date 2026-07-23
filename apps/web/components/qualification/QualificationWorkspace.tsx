@@ -21,7 +21,6 @@ export function QualificationWorkspace({ sectionKey }: { sectionKey?: SectionKey
   const [items, setItems] = useState<Candidate[]>([]);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(true);
-  const [actionError, setActionError] = useState('');
   const section = sectionKey ? getSection(sectionKey) : undefined;
 
   async function load() {
@@ -48,26 +47,6 @@ export function QualificationWorkspace({ sectionKey }: { sectionKey?: SectionKey
     return () => window.clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional sectionKey trigger
   }, [sectionKey]);
-
-  async function handleConsumeIntake() {
-    setActionError('');
-    try {
-      await qualificationApi.consumeIntake();
-      await load();
-    } catch (err) {
-      setActionError(err instanceof Error ? err.message : 'Intake consume failed');
-    }
-  }
-
-  async function handleRunCycle() {
-    setActionError('');
-    try {
-      await qualificationApi.run();
-      await load();
-    } catch (err) {
-      setActionError(err instanceof Error ? err.message : 'Failed to start qualification cycle');
-    }
-  }
 
   if (busy) {
     return (
@@ -177,22 +156,13 @@ export function QualificationWorkspace({ sectionKey }: { sectionKey?: SectionKey
           </p>
         </div>
         <div className={styles.toolbar}>
-          {overview.intake?.status !== 'ACKNOWLEDGED' ? (
-            <button type="button" className={styles.primary} onClick={() => void handleConsumeIntake()}>
-              Consume CI intake
-            </button>
-          ) : null}
-          <button
-            type="button"
-            className={styles.primary}
-            disabled={overview.intake?.status !== 'ACKNOWLEDGED'}
-            onClick={() => void handleRunCycle()}
-          >
-            Run qualification cycle
-          </button>
+          <span className={styles.badge}>{overview.cycle?.status ?? 'NOT STARTED'}</span>
         </div>
       </header>
-      {actionError ? <p className={styles.empty}>{actionError}</p> : null}
+      <p className={styles.empty}>
+        Observe-only. Start or stop the full system from the Control Room or top bar. This stage
+        advances automatically while the system is Running.
+      </p>
       <section className={styles.hero}>
         <div>
           <span className={styles.badge}>{overview.cycle?.status ?? 'NOT STARTED'}</span>

@@ -20,6 +20,16 @@
   line-height: 1.5;
 }
 
+.observeNote {
+  margin: 14px 0 0;
+  padding: 10px 14px;
+  border: 1px solid #d8e0ef;
+  border-radius: 10px;
+  background: #f7f9fd;
+  color: #596079;
+  font-size: 13px;
+}
+
 .stageEyebrow {
   margin: 12px 0 0 !important;
   color: #4c31de !important;

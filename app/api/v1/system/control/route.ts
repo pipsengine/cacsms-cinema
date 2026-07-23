@@ -69,7 +69,7 @@ export async function POST(request: NextRequest) {
         update: { desiredState, reason: typeof reason === 'string' ? reason : null, correlationId, version: { increment: 1 } },
       });
 
-      if (desiredState === 'EMERGENCY_STOP') {
+      if (desiredState === 'EMERGENCY_STOP' || desiredState === 'STOPPED') {
         await transaction.job.updateMany({
           where: { status: { notIn: ['COMPLETED', 'FAILED', 'CANCELLED'] }, deletedAt: null },
           data: { cancelRequestedAt: new Date(), version: { increment: 1 } },
@@ -105,6 +105,28 @@ export async function POST(request: NextRequest) {
       });
       return response;
     }, { maxWait: 10000, timeout: 30000 });
+
+    if (desiredState === 'STOPPED' || desiredState === 'EMERGENCY_STOP' || desiredState === 'PAUSED') {
+      try {
+        const { StrategyService } = await import('@/lib/strategy/service');
+        await new StrategyService().stopObjectivesRun();
+      } catch (error) {
+        console.warn('Strategy autonomy stop request failed:', error instanceof Error ? error.message : error);
+      }
+    }
+
+    if (desiredState === 'RUNNING') {
+      // Kick Stage 01+ immediately in-process so observe pages fill without waiting on the worker poll.
+      void import('@/lib/content-lifecycle-orchestrator')
+        .then(({ ContentLifecycleOrchestrator }) => ContentLifecycleOrchestrator.tick({ force: true }))
+        .catch((error) => {
+          console.warn(
+            'Lifecycle kick after Start failed:',
+            error instanceof Error ? error.message : error,
+          );
+        });
+    }
+
     return NextResponse.json(result);
   } catch (error) {
     console.error('System control mutation failed:', error);

@@ -1,0 +1,148 @@
+import type { StrategyRecord } from './contracts';
+
+export type PolicyDomain = StrategyRecord & {
+  configuration: Record<string, unknown> & { systemKey: string; origin: 'SYSTEM_POLICY' };
+};
+
+/**
+ * System field & domain profiles for Stage 01.
+ * Coverage intent only — no fabricated audience or authority metrics.
+ */
+export const DOMAINS_POLICY: PolicyDomain[] = [
+  {
+    name: 'Science · Public understanding',
+    description:
+      'Permitted coverage for verified scientific concepts aimed at public understanding.',
+    status: 'ACTIVE',
+    priority: 92,
+    configuration: {
+      systemKey: 'domain.science.public-understanding',
+      origin: 'SYSTEM_POLICY',
+      fieldName: 'Science',
+      domainName: 'Public understanding',
+      rationale:
+        'Supports educational authority objectives with evidence-backed science explainers.',
+      coverageStatus: 'PERMITTED',
+      allowedState: 'ALLOWED',
+      countries: ['Priority operating regions'],
+      audiences: ['Learners', 'Educators', 'General public'],
+      formats: ['Short-form video', 'Explainer', 'Documentary segment'],
+      evidenceRequirement: 'At least two independent authoritative sources for material claims',
+      sensitivity: 'STANDARD',
+      seasonalRelevance: 'Evergreen with event-driven spikes allowed',
+      frequencyLimit: 'UNMEASURED',
+      authorityRequirement: 'Primary literature or recognised scientific institutions',
+      parentDomain: 'Science',
+    },
+    effectiveFrom: null,
+    effectiveTo: null,
+  },
+  {
+    name: 'Education · Formal learning support',
+    description:
+      'Permitted coverage that reinforces formal learning outcomes without inventing curricula metrics.',
+    status: 'ACTIVE',
+    priority: 90,
+    configuration: {
+      systemKey: 'domain.education.formal-learning',
+      origin: 'SYSTEM_POLICY',
+      fieldName: 'Education',
+      domainName: 'Formal learning support',
+      rationale: 'Aligns discovery and research with classroom-safe educational framing.',
+      coverageStatus: 'PERMITTED',
+      allowedState: 'ALLOWED',
+      countries: ['Priority operating regions'],
+      audiences: ['Learners', 'Educators'],
+      formats: ['Explainer', 'Lesson segment', 'Short-form video'],
+      evidenceRequirement: 'Curriculum-aligned or institutionally reviewed sources',
+      sensitivity: 'STANDARD',
+      seasonalRelevance: 'Academic calendar aware',
+      frequencyLimit: 'UNMEASURED',
+      authorityRequirement: 'Recognised educational bodies or peer-reviewed pedagogy',
+      parentDomain: 'Education',
+    },
+    effectiveFrom: null,
+    effectiveTo: null,
+  },
+  {
+    name: 'Culture · Regional heritage',
+    description:
+      'Permitted cultural and heritage storytelling under localisation and sensitivity gates.',
+    status: 'ACTIVE',
+    priority: 80,
+    configuration: {
+      systemKey: 'domain.culture.regional-heritage',
+      origin: 'SYSTEM_POLICY',
+      fieldName: 'Culture',
+      domainName: 'Regional heritage',
+      rationale: 'Enables regional relevance without inventing cultural performance metrics.',
+      coverageStatus: 'CONDITIONAL',
+      allowedState: 'ALLOWED_WITH_REVIEW',
+      countries: ['Configured geographies'],
+      audiences: ['Regional audiences', 'General public'],
+      formats: ['Documentary segment', 'Featurette'],
+      evidenceRequirement: 'Locally authoritative cultural sources; community context required',
+      sensitivity: 'ELEVATED',
+      seasonalRelevance: 'Festival and commemorative windows',
+      frequencyLimit: 'UNMEASURED',
+      authorityRequirement: 'Recognised cultural institutions or documented oral histories',
+      parentDomain: 'Culture',
+    },
+    effectiveFrom: null,
+    effectiveTo: null,
+  },
+  {
+    name: 'Current affairs · Civic literacy',
+    description:
+      'Conditional coverage for civic literacy topics subject to source and risk policy.',
+    status: 'ACTIVE',
+    priority: 75,
+    configuration: {
+      systemKey: 'domain.current-affairs.civic-literacy',
+      origin: 'SYSTEM_POLICY',
+      fieldName: 'Current affairs',
+      domainName: 'Civic literacy',
+      rationale: 'Supports informed public discourse while remaining fail-closed on unverified claims.',
+      coverageStatus: 'CONDITIONAL',
+      allowedState: 'ALLOWED_WITH_REVIEW',
+      countries: ['Configured geographies'],
+      audiences: ['General public', 'Educators'],
+      formats: ['Explainer', 'Short-form video'],
+      evidenceRequirement: 'Multi-source verification; no anonymous primary claims',
+      sensitivity: 'HIGH',
+      seasonalRelevance: 'Event-driven',
+      frequencyLimit: 'UNMEASURED',
+      authorityRequirement: 'Recognised newsrooms, official records, or academic analysis',
+      parentDomain: 'Current affairs',
+    },
+    effectiveFrom: null,
+    effectiveTo: null,
+  },
+  {
+    name: 'Health · Public guidance literacy',
+    description:
+      'Restricted health literacy coverage; clinical advice is out of scope.',
+    status: 'ACTIVE',
+    priority: 70,
+    configuration: {
+      systemKey: 'domain.health.public-guidance',
+      origin: 'SYSTEM_POLICY',
+      fieldName: 'Health',
+      domainName: 'Public guidance literacy',
+      rationale: 'Allows public-health literacy only under elevated evidence and risk controls.',
+      coverageStatus: 'RESTRICTED',
+      allowedState: 'RESTRICTED',
+      countries: ['Priority operating regions'],
+      audiences: ['General public', 'Educators'],
+      formats: ['Explainer'],
+      evidenceRequirement: 'Official public-health guidance only; no clinical recommendations',
+      sensitivity: 'CRITICAL',
+      seasonalRelevance: 'Outbreak and campaign windows',
+      frequencyLimit: 'UNMEASURED',
+      authorityRequirement: 'National or international public-health authorities',
+      parentDomain: 'Health',
+    },
+    effectiveFrom: null,
+    effectiveTo: null,
+  },
+];

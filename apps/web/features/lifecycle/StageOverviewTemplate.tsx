@@ -11,7 +11,6 @@ import {
 import { LifecycleBreadcrumb, useLifecycleNavContext } from './LifecycleBreadcrumb';
 import { LifecycleStrip } from './LifecycleStrip';
 import { StagePagesPanel } from './StagePagesPanel';
-import { WorkflowControlBar } from './WorkflowControlBar';
 import { statusForStage, useLifecycleStatus } from './useLifecycleStatus';
 import styles from './lifecycle-page.module.css';
 import roomStyles from '@/app/control-room.module.css';
@@ -52,15 +51,11 @@ function StageOverviewBody({ stage }: { stage: LifecycleStageConfig }) {
         <p>{stage.description}</p>
       </header>
 
-      <WorkflowControlBar
-        workflowRunId={statusPayload.workflowRunId}
-        version={statusPayload.version}
-        allowedActions={statusPayload.allowedActions}
-        overallStatus={statusPayload.overallStatus}
-        stale={statusPayload.stale}
-        connectionError={statusPayload.connectionError}
-        onChanged={() => void statusPayload.refresh()}
-      />
+      <p className={styles.observeNote}>
+        Observe-only stage view. Start or stop the entire system from the Control Room or the
+        persistent top bar. Overall status: <strong>{statusPayload.overallStatus}</strong>
+        {statusPayload.stale ? ' · stale' : ''}.
+      </p>
 
       <section className={`${roomStyles.panel} ${roomStyles.lifecycle}`} style={{ marginTop: 18 }}>
         <div className={roomStyles.sectionHead}>
