@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { Suspense, useState } from 'react';
+import { Suspense, useMemo, useState } from 'react';
 import { Zap } from 'lucide-react';
 import { LIFECYCLE_STAGES, withContextQuery } from '@/apps/web/config/lifecycle-navigation';
 import { useLifecycleNavContext } from './LifecycleBreadcrumb';
@@ -10,18 +10,26 @@ import { StagePagesPanel } from './StagePagesPanel';
 import { statusForStage, useLifecycleStatus } from './useLifecycleStatus';
 import styles from '@/app/control-room.module.css';
 
-function ControlRoomLifecycleStripInner({
-  queue,
-  activeWorkflowIndex,
-}: {
-  queue: Record<string, number> | null | undefined;
-  activeWorkflowIndex: number;
-}) {
+function ControlRoomLifecycleStripInner() {
   const context = useLifecycleNavContext();
   const statusPayload = useLifecycleStatus();
   const [selectedStageId, setSelectedStageId] = useState<string>(LIFECYCLE_STAGES[0]?.id ?? 'discover');
   const selectedStage = LIFECYCLE_STAGES.find((stage) => stage.id === selectedStageId) ?? LIFECYCLE_STAGES[0];
   const selectedStatus = statusForStage(statusPayload, selectedStage.id);
+  const stageStatuses = useMemo(
+    () =>
+      Object.fromEntries(
+        statusPayload.stages.map((item) => [
+          item.id,
+          {
+            executionStatus: item.executionStatus,
+            progressPercent: item.progressPercent,
+            count: item.completedTaskCount ?? item.jobCount,
+          },
+        ]),
+      ),
+    [statusPayload.stages],
+  );
 
   return (
     <>
@@ -30,12 +38,22 @@ function ControlRoomLifecycleStripInner({
           <h2>
             <Zap size={19} /> Autonomous Production Lifecycle
           </h2>
-          <Link href={withContextQuery(selectedStage.overviewHref, context)}>Open selected stage ↗</Link>
+          <Link href={withContextQuery(selectedStage.overviewHref, {
+            ...context,
+            workflowRunId: statusPayload.workflowRunId,
+          })}>
+            Open selected stage ↗
+          </Link>
         </div>
+        {statusPayload.stale || statusPayload.connectionError ? (
+          <p style={{ margin: '0 16px 10px', color: '#b45309', fontSize: 12 }}>
+            {statusPayload.connectionError || 'Showing last confirmed status snapshot.'}
+          </p>
+        ) : null}
         <LifecycleStrip
-          queue={queue ?? statusPayload.queue}
-          activeWorkflowIndex={activeWorkflowIndex}
+          activeStageId={statusPayload.activeStageId}
           selectedStageId={selectedStageId}
+          stageStatuses={stageStatuses}
           onSelectStage={(stage) => setSelectedStageId(stage.id)}
           navigateOnSelect
         />
@@ -46,11 +64,11 @@ function ControlRoomLifecycleStripInner({
 }
 
 export function ControlRoomLifecycleStrip({
-  queue,
-  activeWorkflowIndex,
+  queue: _queue,
+  activeWorkflowIndex: _activeWorkflowIndex,
 }: {
-  queue: Record<string, number> | null | undefined;
-  activeWorkflowIndex: number;
+  queue?: Record<string, number> | null | undefined;
+  activeWorkflowIndex?: number;
 }) {
   return (
     <Suspense
@@ -62,7 +80,7 @@ export function ControlRoomLifecycleStrip({
         </section>
       }
     >
-      <ControlRoomLifecycleStripInner queue={queue} activeWorkflowIndex={activeWorkflowIndex} />
+      <ControlRoomLifecycleStripInner />
     </Suspense>
   );
 }

@@ -97,6 +97,7 @@ export class JobOrchestrator {
           data: { aggregateType: 'Job', aggregateId: jobId, eventType: 'JobStageCompleted', payloadJson: JSON.stringify({ jobId, stage: currentStatus, nextStatus }), correlationId },
         }),
       ]);
+      await this.syncVisualWorkflow(jobId);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       const failureCode = message.startsWith('NO_STAGE_HANDLER:') ? 'NO_STAGE_HANDLER' : 'STAGE_EXECUTION_FAILED';
@@ -114,6 +115,23 @@ export class JobOrchestrator {
           data: { aggregateType: 'Job', aggregateId: jobId, eventType: 'HumanExceptionRequired', payloadJson: JSON.stringify({ jobId, stage: currentStatus, failureCode }), correlationId },
         }),
       ]);
+      await this.syncVisualWorkflow(jobId);
+    }
+  }
+
+  private static async syncVisualWorkflow(jobId: string): Promise<void> {
+    try {
+      const { ensureWorkflowRunForJob, reconcileWorkflowRun } = await import('./visual-workflow/service');
+      const job = await prisma.job.findUnique({ where: { id: jobId }, select: { id: true, projectId: true, correlationId: true } });
+      if (!job) return;
+      const ensured = await ensureWorkflowRunForJob({
+        jobId: job.id,
+        projectId: job.projectId,
+        correlationId: job.correlationId,
+      });
+      await reconcileWorkflowRun(ensured.id);
+    } catch (error) {
+      console.error('visual workflow sync failed', error instanceof Error ? error.message : error);
     }
   }
 
@@ -137,6 +155,7 @@ export class JobOrchestrator {
           data: { aggregateType: 'Job', aggregateId: job.id, eventType: 'HumanExceptionRequired', payloadJson: JSON.stringify({ jobId: job.id, failureCode: 'WORKER_LEASE_EXPIRED' }), correlationId: job.correlationId },
         }),
       ]);
+      await this.syncVisualWorkflow(job.id);
     }
   }
 

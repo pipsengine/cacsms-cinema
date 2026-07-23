@@ -220,6 +220,94 @@
   background: #f7f5ff;
 }
 
+.controlBar {
+  margin-top: 16px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px;
+  border: 1px solid #e6e8ef;
+  border-radius: 12px;
+  background: #fff;
+}
+
+.controlMeta span {
+  display: block;
+  color: #8a91a7;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.controlMeta strong {
+  display: block;
+  margin-top: 4px;
+  font-size: 14px;
+}
+
+.stale {
+  margin-left: 8px;
+  color: #b45309;
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 700;
+}
+
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.controls button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 34px;
+  padding: 0 10px;
+  border: 1px solid #d7dbeb;
+  border-radius: 8px;
+  background: #fff;
+  color: #20263e;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.controls button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.controls button:focus-visible {
+  outline: 2px solid #633bff;
+  outline-offset: 1px;
+}
+
+.danger {
+  color: #9f1239 !important;
+  border-color: #fecdd3 !important;
+  background: #fff1f2 !important;
+}
+
+.controlError,
+.controlPending {
+  width: 100%;
+  margin: 0;
+  font-size: 12px;
+}
+
+.controlError {
+  color: #9f1239;
+}
+
+.controlPending {
+  color: #4c31de;
+}
+
 @media (max-width: 900px) {
   .statusGrid,
   .overviewGrid {

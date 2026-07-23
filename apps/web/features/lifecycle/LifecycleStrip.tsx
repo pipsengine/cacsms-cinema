@@ -4,23 +4,22 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useMemo } from 'react';
 import {
   LIFECYCLE_STAGES,
-  deriveWorkflowStatusFromQueue,
-  stageJobCount,
   withContextQuery,
   type LifecycleStageConfig,
 } from '@/apps/web/config/lifecycle-navigation';
 import styles from '@/app/control-room.module.css';
 
 export function LifecycleStrip({
-  queue,
-  activeWorkflowIndex,
+  activeStageId,
   selectedStageId,
+  stageStatuses,
   onSelectStage,
   navigateOnSelect = true,
 }: {
-  queue: Record<string, number> | null | undefined;
-  activeWorkflowIndex: number;
+  /** Workflow engine active stage (not UI selection). */
+  activeStageId?: string | null;
   selectedStageId: string;
+  stageStatuses?: Record<string, { executionStatus?: string; progressPercent?: number | null; count?: number | null }>;
   onSelectStage?: (stage: LifecycleStageConfig) => void;
   navigateOnSelect?: boolean;
 }) {
@@ -35,10 +34,11 @@ export function LifecycleStrip({
 
   return (
     <div className={styles.steps} role="navigation" aria-label="Autonomous production lifecycle stages">
-      {LIFECYCLE_STAGES.map((stage, index) => {
-        const count = stageJobCount(queue, stage);
-        const workflowStatus = deriveWorkflowStatusFromQueue(queue, stage);
-        const isWorkflowActive = activeWorkflowIndex === index;
+      {LIFECYCLE_STAGES.map((stage) => {
+        const meta = stageStatuses?.[stage.id];
+        const executionStatus = meta?.executionStatus ?? 'UNAVAILABLE';
+        const count = meta?.count;
+        const isWorkflowActive = activeStageId === stage.id;
         const isSelected = selectedStageId === stage.id;
         const href = withContextQuery(stage.overviewHref, context);
         return (
@@ -47,7 +47,7 @@ export function LifecycleStrip({
             key={stage.id}
             className={`${styles.step} ${styles.stepButton} ${isWorkflowActive ? styles.currentStep : ''} ${isSelected ? styles.selectedStep : ''}`}
             title={`${stage.number} ${stage.label}: ${stage.description}`}
-            aria-label={`Stage ${stage.number} ${stage.label}. Workflow status ${workflowStatus}. Open stage overview.`}
+            aria-label={`Stage ${stage.number} ${stage.label}. Execution status ${executionStatus}. Open stage overview.`}
             aria-current={isSelected ? 'true' : undefined}
             onClick={() => {
               onSelectStage?.(stage);
@@ -57,15 +57,7 @@ export function LifecycleStrip({
             <i>{Number(stage.number)}</i>
             <span>{stage.label}</span>
             <strong>{count == null ? '—' : count}</strong>
-            <small>
-              {workflowStatus === 'unavailable'
-                ? 'Unavailable'
-                : workflowStatus === 'active'
-                  ? 'Active'
-                  : count
-                    ? 'Queued'
-                    : 'Idle'}
-            </small>
+            <small>{formatExec(executionStatus)}</small>
           </button>
         );
       })}
@@ -73,14 +65,19 @@ export function LifecycleStrip({
   );
 }
 
-export function workflowActiveIndex(
-  queue: Record<string, number> | null | undefined,
-  activeJobStatus?: string | null,
-): number {
-  if (activeJobStatus) {
-    const bare = activeJobStatus.replace('PROCESSING:', '');
-    return LIFECYCLE_STAGES.findIndex((stage) => stage.workflowStatuses.includes(bare));
-  }
-  if (!queue) return -1;
-  return LIFECYCLE_STAGES.findIndex((stage) => deriveWorkflowStatusFromQueue(queue, stage) === 'active');
+function formatExec(status: string): string {
+  if (status === 'UNAVAILABLE') return 'Unavailable';
+  if (status === 'ACTIVE') return 'Active';
+  if (status === 'COMPLETED') return 'Completed';
+  if (status === 'BLOCKED' || status === 'FAILED') return 'Blocked';
+  if (status === 'QUEUED') return 'Queued';
+  if (status === 'WAITING') return 'Waiting';
+  if (status === 'PAUSED') return 'Paused';
+  if (status === 'NOT_STARTED') return 'Not started';
+  return status.replaceAll('_', ' ');
+}
+
+export function workflowActiveIndex(activeStageId?: string | null): number {
+  if (!activeStageId) return -1;
+  return LIFECYCLE_STAGES.findIndex((stage) => stage.id === activeStageId);
 }

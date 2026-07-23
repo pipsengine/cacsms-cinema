@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { Suspense } from 'react';
+import { Suspense, useMemo } from 'react';
 import { ArrowLeft, ArrowRight, Construction, Zap } from 'lucide-react';
 import {
   LIFECYCLE_STAGES,
@@ -9,8 +9,9 @@ import {
   type LifecycleStageConfig,
 } from '@/apps/web/config/lifecycle-navigation';
 import { LifecycleBreadcrumb, useLifecycleNavContext } from './LifecycleBreadcrumb';
-import { LifecycleStrip, workflowActiveIndex } from './LifecycleStrip';
+import { LifecycleStrip } from './LifecycleStrip';
 import { StagePagesPanel } from './StagePagesPanel';
+import { WorkflowControlBar } from './WorkflowControlBar';
 import { statusForStage, useLifecycleStatus } from './useLifecycleStatus';
 import styles from './lifecycle-page.module.css';
 import roomStyles from '@/app/control-room.module.css';
@@ -23,10 +24,22 @@ function StageOverviewBody({ stage }: { stage: LifecycleStageConfig }) {
   const index = LIFECYCLE_STAGES.findIndex((item) => item.id === stage.id);
   const previous = index > 0 ? LIFECYCLE_STAGES[index - 1] : null;
   const next = index >= 0 && index < LIFECYCLE_STAGES.length - 1 ? LIFECYCLE_STAGES[index + 1] : null;
-  const workflowLabel = stageStatus?.workflowStatus ?? 'unavailable';
-  const jobCount = stageStatus?.jobCount;
+  const executionLabel = stageStatus?.executionStatus ?? 'UNAVAILABLE';
   const progress = stageStatus?.progressPercent;
-  const activeWorkflowIndex = workflowActiveIndex(statusPayload.queue);
+  const stageStatuses = useMemo(
+    () =>
+      Object.fromEntries(
+        statusPayload.stages.map((item) => [
+          item.id,
+          {
+            executionStatus: item.executionStatus,
+            progressPercent: item.progressPercent,
+            count: item.completedTaskCount ?? item.jobCount,
+          },
+        ]),
+      ),
+    [statusPayload.stages],
+  );
 
   return (
     <div className={styles.page}>
@@ -39,6 +52,16 @@ function StageOverviewBody({ stage }: { stage: LifecycleStageConfig }) {
         <p>{stage.description}</p>
       </header>
 
+      <WorkflowControlBar
+        workflowRunId={statusPayload.workflowRunId}
+        version={statusPayload.version}
+        allowedActions={statusPayload.allowedActions}
+        overallStatus={statusPayload.overallStatus}
+        stale={statusPayload.stale}
+        connectionError={statusPayload.connectionError}
+        onChanged={() => void statusPayload.refresh()}
+      />
+
       <section className={`${roomStyles.panel} ${roomStyles.lifecycle}`} style={{ marginTop: 18 }}>
         <div className={roomStyles.sectionHead}>
           <h2>
@@ -46,9 +69,9 @@ function StageOverviewBody({ stage }: { stage: LifecycleStageConfig }) {
           </h2>
         </div>
         <LifecycleStrip
-          queue={statusPayload.queue}
-          activeWorkflowIndex={activeWorkflowIndex}
+          activeStageId={statusPayload.activeStageId}
           selectedStageId={stage.id}
+          stageStatuses={stageStatuses}
           navigateOnSelect
         />
       </section>
@@ -57,24 +80,28 @@ function StageOverviewBody({ stage }: { stage: LifecycleStageConfig }) {
 
       <section className={styles.statusGrid} aria-label="Stage operational summary">
         <article>
-          <span>Workflow status</span>
-          <strong>{titleCase(workflowLabel)}</strong>
-          <small>Driven by persisted job queue — not by page selection</small>
+          <span>Execution status</span>
+          <strong>{titleCase(executionLabel)}</strong>
+          <small>Persisted backend status — selection does not change execution</small>
         </article>
         <article>
-          <span>Jobs in stage</span>
-          <strong>{jobCount == null ? 'Unavailable' : jobCount}</strong>
-          <small>Queued + processing for this stage&apos;s statuses</small>
+          <span>Tasks</span>
+          <strong>
+            {stageStatus?.completedTaskCount != null && stageStatus?.totalTaskCount != null
+              ? `${stageStatus.completedTaskCount}/${stageStatus.totalTaskCount}`
+              : 'Unavailable'}
+          </strong>
+          <small>Completed / applicable tasks for this stage</small>
         </article>
         <article>
           <span>Progress</span>
-          <strong>{progress == null ? 'Unavailable' : `${progress}%`}</strong>
-          <small>Gate completion is not inferred from navigation</small>
+          <strong>{progress == null ? 'Unavailable' : `${Number(progress).toFixed(1)}%`}</strong>
+          <small>Weighted tasks and mandatory gates only</small>
         </article>
         <article>
           <span>Blocking exceptions</span>
           <strong>{stageStatus?.blockingIssues ?? 0}</strong>
-          <small>Open human-exception pressure for this stage</small>
+          <small>Open blocking exceptions for this stage</small>
         </article>
       </section>
 
@@ -89,23 +116,23 @@ function StageOverviewBody({ stage }: { stage: LifecycleStageConfig }) {
         <div className={styles.overviewGrid}>
           <div>
             <h3>Inputs received</h3>
-            <p>Artifacts and context produced by the previous lifecycle stage, when the worker has advanced jobs into this stage.</p>
+            <p>Artifacts produced by prior stages when the worker has advanced the linked job into this stage.</p>
           </div>
           <div>
             <h3>Current work</h3>
             <p>
-              {jobCount && jobCount > 0
-                ? `${jobCount} job(s) currently mapped to ${stage.label} statuses.`
-                : 'No jobs are currently mapped to this stage’s workflow statuses.'}
+              {executionLabel === 'ACTIVE'
+                ? 'This stage is currently executing in the persisted workflow run.'
+                : `Execution status is ${executionLabel}.`}
             </p>
           </div>
           <div>
             <h3>Mandatory gates</h3>
-            <p>All configured workflow statuses for this stage must clear before the worker advances. Opening this overview does not pass gates.</p>
+            <p>Stage completion requires passed mandatory gates and zero open blocking exceptions.</p>
           </div>
           <div>
             <h3>Outputs produced</h3>
-            <p>Stage outputs remain unavailable until the autonomous worker records successful completion evidence in MSSQL.</p>
+            <p>Outputs remain unavailable until the worker records successful stage evidence in MSSQL.</p>
           </div>
         </div>
       </section>

@@ -51,6 +51,7 @@ export function StagePagesPanel({
             page.capability === 'not_available'
               ? 'not_available'
               : pageStatus?.status ?? 'not_started';
+          const executionStatus = pageStatus?.executionStatus ?? (page.capability === 'not_available' ? 'UNAVAILABLE' : 'NOT_STARTED');
           const href = withContextQuery(page.href, context);
           return (
             <article key={page.id} className={styles.card} data-status={status}>
@@ -58,7 +59,7 @@ export function StagePagesPanel({
                 <span className={styles.iconWrap}>
                   <LifecycleIcon name={page.icon} size={18} />
                 </span>
-                <span className={styles.badge}>{formatStatus(status)}</span>
+                <span className={styles.badge} title={`Execution: ${executionStatus}`}>{formatStatus(status)}</span>
               </div>
               <h4>{page.label}</h4>
               <p>{page.description}</p>

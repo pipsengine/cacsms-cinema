@@ -80,6 +80,18 @@ export async function POST(request: NextRequest) {
       },
     });
 
+    try {
+      const { ensureWorkflowRunForJob, reconcileWorkflowRun } = await import('@/lib/visual-workflow/service');
+      const ensured = await ensureWorkflowRunForJob({
+        jobId: job.id,
+        projectId: job.projectId,
+        correlationId: job.correlationId,
+      });
+      await reconcileWorkflowRun(ensured.id);
+    } catch (workflowError) {
+      console.error('Failed to seed visual workflow run for job', workflowError);
+    }
+
     return NextResponse.json(job, { status: 201 });
   } catch (error) {
     console.error('Failed to create job:', error);

@@ -35,7 +35,6 @@ import { useEffect, useId, useMemo, useState } from 'react';
 import { LifecycleIcon } from '@/apps/web/config/lifecycle-icons';
 import {
   LIFECYCLE_STAGES,
-  deriveWorkflowStatusFromQueue,
   findActiveLifecyclePage,
   findStageForPathname,
   matchesPageRoute,
@@ -158,10 +157,13 @@ export function CacsmsSidebar() {
     let cancelled = false;
     async function loadStatus() {
       try {
-        const response = await fetch('/api/lifecycle/status', { cache: 'no-store' });
+        const params = new URLSearchParams();
+        if (context.workflowRunId) params.set('workflowRunId', context.workflowRunId);
+        if (context.projectId) params.set('projectId', context.projectId);
+        if (context.jobId) params.set('jobId', context.jobId);
+        const response = await fetch(`/api/lifecycle/status?${params.toString()}`, { cache: 'no-store' });
         if (!response.ok) return;
         const payload = (await response.json()) as {
-          queue?: Record<string, number>;
           stages?: Array<{ id: string; workflowStatus: WorkflowOperationalStatus }>;
         };
         if (cancelled) return;
@@ -169,17 +171,9 @@ export function CacsmsSidebar() {
           setWorkflowByStage(
             Object.fromEntries(payload.stages.map((stage) => [stage.id, stage.workflowStatus])),
           );
-          return;
-        }
-        if (payload.queue) {
-          setWorkflowByStage(
-            Object.fromEntries(
-              LIFECYCLE_STAGES.map((stage) => [stage.id, deriveWorkflowStatusFromQueue(payload.queue, stage)]),
-            ),
-          );
         }
       } catch {
-        /* status unavailable — leave dots as pending/unavailable via empty map */
+        /* status unavailable */
       }
     }
     void loadStatus();
@@ -188,7 +182,7 @@ export function CacsmsSidebar() {
       cancelled = true;
       window.clearInterval(interval);
     };
-  }, []);
+  }, [context.workflowRunId, context.projectId, context.jobId]);
 
   const toggleCollapse = () =>
     setCollapsed((value) => {

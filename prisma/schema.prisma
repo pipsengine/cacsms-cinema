@@ -8,14 +8,15 @@ datasource db {
 }
 
 model Project {
-  id          String    @id @default(uuid())
-  name        String
-  description String?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-  deletedAt   DateTime?
-  jobs        Job[]
-  scripts     Script[]
+  id                 String              @id @default(uuid())
+  name               String
+  description        String?
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  deletedAt          DateTime?
+  jobs               Job[]
+  scripts            Script[]
+  visualWorkflowRuns VisualWorkflowRun[]
 
   @@index([deletedAt])
 }
@@ -437,5 +438,175 @@ model OutboxEvent {
 
   @@index([status, availableAt])
   @@index([aggregateType, aggregateId])
+  @@index([correlationId])
+}
+
+/// Authoritative visual-production lifecycle workflow run (persisted status).
+model VisualWorkflowRun {
+  id                  String    @id @default(uuid())
+  projectId           String
+  project             Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  scriptId            String?
+  jobId               String?   @unique
+  status              String    @default("NOT_STARTED")
+  currentStageId      String?
+  currentTaskId       String?
+  progressPercent     Float?
+  startedAt           DateTime?
+  pausedAt            DateTime?
+  completedAt         DateTime?
+  stoppedAt           DateTime?
+  lastHeartbeatAt     DateTime?
+  stopOrFailureReason String?
+  checkpointJson      String?   @db.NVarChar(Max)
+  correlationId       String    @default(uuid())
+  version             Int       @default(1)
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  stages     VisualWorkflowStageRun[]
+  pages      VisualWorkflowPageStatus[]
+  tasks      VisualWorkflowTask[]
+  gates      VisualWorkflowGate[]
+  exceptions VisualWorkflowException[]
+  events     VisualWorkflowEvent[]
+
+  @@index([projectId, status, updatedAt])
+  @@index([status, lastHeartbeatAt])
+  @@index([correlationId])
+}
+
+model VisualWorkflowStageRun {
+  id                      String    @id @default(uuid())
+  workflowRunId           String
+  workflowRun             VisualWorkflowRun @relation(fields: [workflowRunId], references: [id], onDelete: Cascade)
+  stageId                 String
+  stageOrder              Int
+  status                  String    @default("NOT_STARTED")
+  progressPercent         Float?
+  completedTaskCount      Int       @default(0)
+  totalTaskCount          Int       @default(0)
+  currentTaskId           String?
+  blockingExceptionCount  Int       @default(0)
+  attemptCount            Int       @default(0)
+  startedAt               DateTime?
+  completedAt             DateTime?
+  inputRefsJson           String?   @db.NVarChar(Max)
+  outputRefsJson          String?   @db.NVarChar(Max)
+  errorClassification     String?
+  retryEligible           Boolean   @default(false)
+  checkpointJson          String?   @db.NVarChar(Max)
+  version                 Int       @default(1)
+  createdAt               DateTime  @default(now())
+  updatedAt               DateTime  @updatedAt
+
+  @@unique([workflowRunId, stageId])
+  @@index([workflowRunId, stageOrder])
+  @@index([status, updatedAt])
+}
+
+model VisualWorkflowPageStatus {
+  id                String    @id @default(uuid())
+  workflowRunId     String
+  workflowRun       VisualWorkflowRun @relation(fields: [workflowRunId], references: [id], onDelete: Cascade)
+  stageId           String
+  pageId            String
+  status            String    @default("NOT_STARTED")
+  recordCount       Int?
+  blockingIssueCount Int      @default(0)
+  progressPercent   Float?
+  lastActivityAt    DateTime?
+  startedAt         DateTime?
+  completedAt       DateTime?
+  statusReason      String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@unique([workflowRunId, stageId, pageId])
+  @@index([workflowRunId, stageId])
+  @@index([status, updatedAt])
+}
+
+model VisualWorkflowTask {
+  id               String    @id @default(uuid())
+  workflowRunId    String
+  workflowRun      VisualWorkflowRun @relation(fields: [workflowRunId], references: [id], onDelete: Cascade)
+  stageId          String
+  pageId           String?
+  taskType         String
+  status           String    @default("NOT_STARTED")
+  sequenceOrder    Int
+  weight           Float     @default(1)
+  applicable       Boolean   @default(true)
+  attemptCount     Int       @default(0)
+  maxAttempts      Int       @default(3)
+  retryEligible    Boolean   @default(true)
+  idempotencyKey   String?   @unique
+  startedAt        DateTime?
+  completedAt      DateTime?
+  inputRefsJson    String?   @db.NVarChar(Max)
+  outputRefsJson   String?   @db.NVarChar(Max)
+  errorDetails     String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  @@index([workflowRunId, stageId, sequenceOrder])
+  @@index([status, updatedAt])
+}
+
+model VisualWorkflowGate {
+  id                String    @id @default(uuid())
+  workflowRunId     String
+  workflowRun       VisualWorkflowRun @relation(fields: [workflowRunId], references: [id], onDelete: Cascade)
+  stageId           String
+  gateType          String
+  mandatory         Boolean   @default(true)
+  result            String    @default("PENDING")
+  measuredScore     Float?
+  requiredThreshold Float?
+  calculationBasis  String?
+  evidenceJson      String?   @db.NVarChar(Max)
+  evaluatedAt       DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@unique([workflowRunId, stageId, gateType])
+  @@index([workflowRunId, stageId])
+}
+
+model VisualWorkflowException {
+  id               String    @id @default(uuid())
+  workflowRunId    String
+  workflowRun      VisualWorkflowRun @relation(fields: [workflowRunId], references: [id], onDelete: Cascade)
+  stageId          String?
+  taskId           String?
+  classification   String
+  severity         String
+  blocking         Boolean   @default(true)
+  status           String    @default("OPEN")
+  safeDescription  String
+  retryEligible    Boolean   @default(false)
+  resolutionDetails String?
+  createdAt        DateTime  @default(now())
+  resolvedAt       DateTime?
+
+  @@index([workflowRunId, status, blocking])
+  @@index([stageId, status])
+}
+
+model VisualWorkflowEvent {
+  id              String   @id @default(uuid())
+  workflowRunId   String
+  workflowRun     VisualWorkflowRun @relation(fields: [workflowRunId], references: [id], onDelete: Cascade)
+  stageId         String?
+  eventType       String
+  previousStatus  String?
+  newStatus       String?
+  actorType       String
+  correlationId   String
+  metadataJson    String?  @db.NVarChar(Max)
+  createdAt       DateTime @default(now())
+
+  @@index([workflowRunId, createdAt])
   @@index([correlationId])
 }

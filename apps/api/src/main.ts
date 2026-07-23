@@ -20,6 +20,13 @@ process.on('SIGTERM', () => shutdown('SIGTERM'));
 
 async function runWorker() {
   console.log('Starting cacsms-cinema background worker...');
+  try {
+    const { recoverActiveWorkflowRuns } = await import('../../../lib/visual-workflow/service');
+    const recovered = await recoverActiveWorkflowRuns();
+    if (recovered > 0) console.log(`Recovered ${recovered} interrupted visual workflow run(s) from checkpoint.`);
+  } catch (error) {
+    console.error('Visual workflow recovery on startup failed:', error instanceof Error ? error.message : error);
+  }
   console.log('Background worker listening for jobs...');
 
   while (isRunning) {
