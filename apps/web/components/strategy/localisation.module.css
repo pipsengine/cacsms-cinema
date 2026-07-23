@@ -1,0 +1,347 @@
+@import url('https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=Fraunces:opsz,wght@9..144,600;9..144,700&display=swap');
+
+.page {
+  --ink: #14201c;
+  --muted: #5c6b64;
+  --forest: #1f6b4a;
+  --line: #d5e0d9;
+  --panel: #fff;
+  --wash: #eef4f0;
+  min-height: 100%;
+  padding: 0 0 40px;
+  color: var(--ink);
+  background: var(--wash);
+  font: 14px/1.5 Figtree, sans-serif;
+}
+
+.top {
+  padding: 20px 28px 12px;
+  border-bottom: 1px solid var(--line);
+  background: #10241c;
+  color: #eef7f1;
+}
+
+.top h1 {
+  margin: 0;
+  font-family: Fraunces, Georgia, serif;
+  font-size: clamp(22px, 2.6vw, 30px);
+}
+
+.top p {
+  margin: 8px 0 0;
+  color: #a8c0b3;
+  font-size: 13px;
+  max-width: 560px;
+}
+
+.ops {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 14px;
+  margin: 12px 28px 0;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.ops strong {
+  color: var(--ink);
+}
+
+.stage {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(280px, 0.9fr);
+  gap: 16px;
+  padding: 16px 28px 0;
+}
+
+.constellation {
+  position: relative;
+  min-height: 420px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background:
+    radial-gradient(circle at 50% 48%, rgba(31, 107, 74, 0.12), transparent 42%),
+    linear-gradient(180deg, #f7fbf8, #eef4f0);
+  overflow: hidden;
+}
+
+.hub,
+.sat {
+  position: absolute;
+  border: 0;
+  cursor: pointer;
+  color: inherit;
+  font: inherit;
+  text-align: center;
+}
+
+.hub {
+  left: 50%;
+  top: 46%;
+  transform: translate(-50%, -50%);
+  width: 140px;
+  height: 140px;
+  border-radius: 50%;
+  background: #1f6b4a;
+  color: #fff;
+  box-shadow: 0 10px 30px rgba(16, 36, 28, 0.25);
+  display: grid;
+  place-content: center;
+  gap: 4px;
+  z-index: 2;
+}
+
+.hub strong {
+  font-family: Fraunces, Georgia, serif;
+  font-size: 22px;
+}
+
+.hub span {
+  font-size: 11px;
+  opacity: 0.85;
+}
+
+.hubActive {
+  outline: 3px solid #86efac;
+  outline-offset: 4px;
+}
+
+.sat {
+  width: 92px;
+  height: 92px;
+  border-radius: 50%;
+  background: var(--panel);
+  border: 2px solid #9dceb6 !important;
+  display: grid;
+  place-content: center;
+  gap: 2px;
+  box-shadow: 0 4px 14px rgba(16, 36, 28, 0.08);
+}
+
+.sat strong {
+  font-family: Fraunces, Georgia, serif;
+  font-size: 18px;
+}
+
+.sat span {
+  font-size: 10px;
+  color: var(--muted);
+}
+
+.satActive {
+  border-color: #1f6b4a !important;
+  background: #ecfdf3;
+  box-shadow: 0 0 0 3px rgba(31, 107, 74, 0.2);
+}
+
+.satGated {
+  border-style: dashed !important;
+}
+
+/* Fixed satellite positions around hub */
+.pos0 {
+  left: 18%;
+  top: 18%;
+}
+.pos1 {
+  left: 72%;
+  top: 16%;
+}
+.pos2 {
+  left: 78%;
+  top: 58%;
+}
+.pos3 {
+  left: 14%;
+  top: 62%;
+}
+
+.orbitHint {
+  position: absolute;
+  left: 16px;
+  bottom: 12px;
+  margin: 0;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.ladderPanel {
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--panel);
+  padding: 16px;
+}
+
+.ladderPanel h2 {
+  margin: 0 0 4px;
+  font-family: Fraunces, Georgia, serif;
+  font-size: 20px;
+}
+
+.stack {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 10px 0 14px;
+}
+
+.stackChip {
+  min-height: 24px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: #eaf5ee;
+  color: #14533a;
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.ladder {
+  display: grid;
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.step {
+  display: grid;
+  grid-template-columns: 28px 1fr;
+  gap: 10px;
+  padding: 10px 0;
+  border-top: 1px solid #e5eee8;
+}
+
+.step:first-child {
+  border-top: 0;
+}
+
+.stepIndex {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: #1f6b4a;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  display: grid;
+  place-items: center;
+}
+
+.stepLabel {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--forest);
+}
+
+.stepValue {
+  margin: 2px 0 0;
+  font-size: 13px;
+  color: var(--ink);
+}
+
+.reviewBanner {
+  margin-top: 12px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: #fef0c7;
+  color: #b54708;
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.empty,
+.unavailable {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  margin: 24px 28px;
+  padding: 40px 16px;
+  border: 1px dashed #b7cfc1;
+  border-radius: 12px;
+  background: var(--panel);
+  text-align: center;
+}
+
+.empty h2,
+.unavailable h2,
+.empty p,
+.unavailable p {
+  margin: 0;
+}
+
+.empty p,
+.unavailable p {
+  max-width: 460px;
+  color: var(--muted);
+}
+
+.errorBanner {
+  margin: 0 28px 12px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: #fef3f2;
+  color: #912018;
+  font-size: 13px;
+}
+
+.skeleton {
+  height: 420px;
+  margin: 20px 28px;
+  border-radius: 16px;
+  background: linear-gradient(90deg, #d7e4dc, #eef4f0, #d7e4dc);
+  background-size: 200% 100%;
+  animation: pulse 1.4s infinite;
+}
+
+@keyframes pulse {
+  to {
+    background-position: -200% 0;
+  }
+}
+
+@media (max-width: 900px) {
+  .stage {
+    grid-template-columns: 1fr;
+  }
+
+  .constellation {
+    min-height: 360px;
+  }
+}
+
+@media (max-width: 700px) {
+  .top,
+  .ops,
+  .stage,
+  .errorBanner,
+  .skeleton,
+  .empty,
+  .unavailable {
+    margin-left: 16px;
+    margin-right: 16px;
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+
+  .top {
+    margin: 0;
+  }
+
+  .stage {
+    margin: 0;
+    padding-top: 16px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .page * {
+    animation: none !important;
+  }
+}

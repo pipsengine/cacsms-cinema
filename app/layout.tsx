@@ -3,7 +3,10 @@ import './globals.css'; // Global styles
 import { AppShell } from '@/apps/web/components/shell/AppShell';
 
 export const metadata: Metadata = {
-  title: 'CACSMS Visual Studio',
+  title: {
+    default: 'CACSMS Visual Studio',
+    template: '%s · CACSMS Visual Studio',
+  },
   description: 'Production-grade CACSMS autonomous visual intelligence and image generation workspace',
 };
 

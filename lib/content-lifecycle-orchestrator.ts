@@ -79,6 +79,13 @@ export class ContentLifecycleOrchestrator {
 
     await service.startObjectivesRun(`${cycleKey}-objectives`);
     await service.reconcileDomains(overview.versionId);
+    await service.reconcileGeographies(overview.versionId);
+    await service.reconcileAudiences(overview.versionId);
+    await service.reconcileEditorial(overview.versionId);
+    await service.reconcileFormats(overview.versionId);
+    await service.reconcileChannels(overview.versionId);
+    await service.reconcileLocalisation(overview.versionId);
+    await service.reconcileSourcePolicy(overview.versionId);
     await this.ensureMandatorySectionStubs(overview.versionId);
 
     await service.validate(overview.versionId, `${cycleKey}-validate`);
@@ -93,7 +100,19 @@ export class ContentLifecycleOrchestrator {
   private static async ensureMandatorySectionStubs(versionId: string) {
     const repo = new StrategyRepository();
     for (const section of REQUIRED_SECTIONS) {
-      if (section === 'objectives' || section === 'domains') continue;
+      if (
+        section === 'objectives' ||
+        section === 'domains' ||
+        section === 'geographies' ||
+        section === 'audiences' ||
+        section === 'editorial-policy' ||
+        section === 'formats' ||
+        section === 'channels' ||
+        section === 'localisation' ||
+        section === 'source-policy'
+      ) {
+        continue;
+      }
       const existing = await repo.list(versionId, section);
       const hasActive = existing.some((record) => record.status === 'ACTIVE');
       if (hasActive) continue;

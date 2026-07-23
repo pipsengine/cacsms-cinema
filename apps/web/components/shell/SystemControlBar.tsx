@@ -14,6 +14,8 @@ type DashboardSnippet = {
   };
 };
 
+const NIGERIA_TZ = 'Africa/Lagos';
+
 async function postControl(action: 'start' | 'pause' | 'resume' | 'stop' | 'emergency_stop') {
   const response = await fetch('/api/v1/system/control', {
     method: 'POST',
@@ -38,8 +40,37 @@ async function postControl(action: 'start' | 'pause' | 'resume' | 'stop' | 'emer
   }
 }
 
-function titleCase(value: string) {
-  return value.replaceAll('_', ' ').replace(/\b\w/g, (letter) => letter.toUpperCase());
+function controlStateClass(state: string): string {
+  switch (state) {
+    case 'RUNNING':
+      return styles.stateRunning;
+    case 'STOPPED':
+      return styles.stateStopped;
+    case 'PAUSED':
+      return styles.statePaused;
+    case 'EMERGENCY_STOP':
+      return styles.stateEmergency;
+    default:
+      return styles.stateUnavailable;
+  }
+}
+
+function formatNigeriaDateTime(now: Date) {
+  const date = new Intl.DateTimeFormat('en-GB', {
+    timeZone: NIGERIA_TZ,
+    weekday: 'short',
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  }).format(now);
+  const time = new Intl.DateTimeFormat('en-GB', {
+    timeZone: NIGERIA_TZ,
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+  }).format(now);
+  return { date, time };
 }
 
 export function SystemControlBar({
@@ -52,6 +83,8 @@ export function SystemControlBar({
   const [data, setData] = useState<DashboardSnippet | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // null until mount — avoids SSR/client clock mismatch hydration errors
+  const [clock, setClock] = useState<{ date: string; time: string } | null>(null);
 
   const refresh = useCallback(async () => {
     try {
@@ -74,6 +107,13 @@ export function SystemControlBar({
     };
   }, [refresh]);
 
+  useEffect(() => {
+    const tick = () => setClock(formatNigeriaDateTime(new Date()));
+    tick();
+    const interval = window.setInterval(tick, 1000);
+    return () => window.clearInterval(interval);
+  }, []);
+
   const controlState: ControlState = data?.system.controlState ?? 'UNAVAILABLE';
 
   async function changeControl(action: 'start' | 'pause' | 'resume' | 'stop' | 'emergency_stop') {
@@ -83,6 +123,7 @@ export function SystemControlBar({
       await postControl(action);
       await refresh();
       onChanged?.();
+      window.dispatchEvent(new CustomEvent('cacsms:system-control-changed', { detail: { action } }));
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Control request failed.');
     } finally {
@@ -104,8 +145,14 @@ export function SystemControlBar({
         <span className={styles.sep} aria-hidden>
           ·
         </span>
-        <em>{titleCase(controlState)}</em>
+        <em className={controlStateClass(controlState)}>{controlState.replaceAll('_', ' ')}</em>
       </div>
+
+      <time className={styles.clock} aria-live="polite" aria-label="Nigeria local time">
+        <span className={styles.clockDate}>{clock?.date ?? '—'}</span>
+        <span className={styles.clockTime}>{clock?.time ?? '--:--:--'}</span>
+        <span className={styles.clockZone}>WAT</span>
+      </time>
 
       <div className={styles.controls}>
         <button

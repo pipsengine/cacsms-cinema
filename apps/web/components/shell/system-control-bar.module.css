@@ -37,12 +37,65 @@
 
 .status em {
   font-style: normal;
-  font-weight: 650;
-  letter-spacing: 0.02em;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.stateRunning {
+  color: #15803d;
+}
+
+.stateStopped {
+  color: #c9362b;
+}
+
+.statePaused {
+  color: #c2410c;
+}
+
+.stateEmergency {
+  color: #b91c1c;
+}
+
+.stateUnavailable {
+  color: #68738c;
 }
 
 .sep {
   color: #9aa6bd;
+}
+
+.clock {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-left: 4px;
+  padding: 4px 10px;
+  border: 1px solid #e2e8f2;
+  border-radius: 8px;
+  background: #f7f9fc;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.clockDate {
+  color: #4b5a78;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.clockTime {
+  color: #0d193a;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.clockZone {
+  color: #7a879f;
+  font-size: 11px;
+  font-weight: 650;
 }
 
 .liveDot,
@@ -68,6 +121,10 @@
   flex-wrap: wrap;
   gap: 8px;
   margin-left: auto;
+}
+
+.top .clock {
+  margin-left: 8px;
 }
 
 .controls button {

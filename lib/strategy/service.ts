@@ -3,6 +3,13 @@ import { prisma } from '@/lib/db';
 import { REQUIRED_SECTIONS, isMutableStrategyStatus, type SectionKey } from './contracts';
 import { OBJECTIVES_POLICY } from './objectives-policy';
 import { DOMAINS_POLICY } from './domains-policy';
+import { GEOGRAPHIES_POLICY } from './geographies-policy';
+import { AUDIENCES_POLICY } from './audiences-policy';
+import { EDITORIAL_POLICY } from './editorial-policy';
+import { FORMATS_POLICY } from './formats-policy';
+import { CHANNELS_POLICY } from './channels-policy';
+import { LOCALISATION_POLICY } from './localisation-policy';
+import { SOURCE_POLICY } from './source-policy';
 import { StrategyRepository } from './repository';
 
 export class StrategyService {
@@ -370,6 +377,489 @@ export class StrategyService {
     `;
 
     return { created, updated, total: DOMAINS_POLICY.length };
+  }
+
+  async reconcileGeographies(versionId?: string) {
+    await this.repo.ensureDraft();
+    const overview = await this.repo.overview();
+    const targetVersionId = versionId ?? overview.versionId;
+    if (!targetVersionId) throw new Error('No strategy version available');
+    if (!isMutableStrategyStatus(overview.status) && !versionId) {
+      throw new Error('Activated strategy history is immutable');
+    }
+
+    const existing = await this.repo.list(targetVersionId, 'geographies');
+    for (const record of existing) {
+      const key = String(record.configuration?.systemKey ?? '');
+      if (key === 'policy.geographies' && record.id) {
+        await this.repo.update(targetVersionId, 'geographies', record.id, {
+          name: record.name,
+          description: record.description ?? '',
+          status: 'ARCHIVED',
+          priority: record.priority,
+          configuration: {
+            ...record.configuration,
+            archivedReason: 'Superseded by geography policy profiles',
+          },
+          effectiveFrom: record.effectiveFrom ?? null,
+          effectiveTo: record.effectiveTo ?? null,
+        });
+      }
+    }
+
+    const live = (await this.repo.list(targetVersionId, 'geographies')).filter(
+      (record) => record.status !== 'ARCHIVED',
+    );
+    const byKey = new Map(
+      live
+        .map((record) => [String(record.configuration?.systemKey ?? ''), record] as const)
+        .filter(([key]) => Boolean(key)),
+    );
+
+    let created = 0;
+    let updated = 0;
+    for (const policy of GEOGRAPHIES_POLICY) {
+      const systemKey = String(policy.configuration.systemKey);
+      const prior = byKey.get(systemKey);
+      if (prior?.id) {
+        await this.repo.update(targetVersionId, 'geographies', prior.id, {
+          ...policy,
+          id: prior.id,
+        });
+        updated += 1;
+      } else {
+        const record = await this.repo.create(targetVersionId, 'geographies', policy);
+        if (record.id) byKey.set(systemKey, record);
+        created += 1;
+      }
+    }
+
+    await prisma.$executeRaw`
+      INSERT INTO strategy_audit_events(version_id, action, actor_type, new_value, reason)
+      VALUES (
+        CONVERT(uniqueidentifier, ${targetVersionId}),
+        ${'GEOGRAPHIES_POLICY_RECONCILED'},
+        ${'SYSTEM'},
+        ${JSON.stringify({ created, updated, policyCount: GEOGRAPHIES_POLICY.length })},
+        ${'Country & regional profiles reconciled from system policy; no census metrics fabricated'}
+      )
+    `;
+
+    return { created, updated, total: GEOGRAPHIES_POLICY.length };
+  }
+
+  async reconcileAudiences(versionId?: string) {
+    await this.repo.ensureDraft();
+    const overview = await this.repo.overview();
+    const targetVersionId = versionId ?? overview.versionId;
+    if (!targetVersionId) throw new Error('No strategy version available');
+    if (!isMutableStrategyStatus(overview.status) && !versionId) {
+      throw new Error('Activated strategy history is immutable');
+    }
+
+    const existing = await this.repo.list(targetVersionId, 'audiences');
+    for (const record of existing) {
+      const key = String(record.configuration?.systemKey ?? '');
+      if (key === 'policy.audiences' && record.id) {
+        await this.repo.update(targetVersionId, 'audiences', record.id, {
+          name: record.name,
+          description: record.description ?? '',
+          status: 'ARCHIVED',
+          priority: record.priority,
+          configuration: {
+            ...record.configuration,
+            archivedReason: 'Superseded by audience policy personas',
+          },
+          effectiveFrom: record.effectiveFrom ?? null,
+          effectiveTo: record.effectiveTo ?? null,
+        });
+      }
+    }
+
+    const live = (await this.repo.list(targetVersionId, 'audiences')).filter(
+      (record) => record.status !== 'ARCHIVED',
+    );
+    const byKey = new Map(
+      live
+        .map((record) => [String(record.configuration?.systemKey ?? ''), record] as const)
+        .filter(([key]) => Boolean(key)),
+    );
+
+    let created = 0;
+    let updated = 0;
+    for (const policy of AUDIENCES_POLICY) {
+      const systemKey = String(policy.configuration.systemKey);
+      const prior = byKey.get(systemKey);
+      if (prior?.id) {
+        await this.repo.update(targetVersionId, 'audiences', prior.id, {
+          ...policy,
+          id: prior.id,
+        });
+        updated += 1;
+      } else {
+        const record = await this.repo.create(targetVersionId, 'audiences', policy);
+        if (record.id) byKey.set(systemKey, record);
+        created += 1;
+      }
+    }
+
+    await prisma.$executeRaw`
+      INSERT INTO strategy_audit_events(version_id, action, actor_type, new_value, reason)
+      VALUES (
+        CONVERT(uniqueidentifier, ${targetVersionId}),
+        ${'AUDIENCES_POLICY_RECONCILED'},
+        ${'SYSTEM'},
+        ${JSON.stringify({ created, updated, policyCount: AUDIENCES_POLICY.length })},
+        ${'Audience personas reconciled from system policy; no engagement metrics fabricated'}
+      )
+    `;
+
+    return { created, updated, total: AUDIENCES_POLICY.length };
+  }
+
+  async reconcileEditorial(versionId?: string) {
+    await this.repo.ensureDraft();
+    const overview = await this.repo.overview();
+    const targetVersionId = versionId ?? overview.versionId;
+    if (!targetVersionId) throw new Error('No strategy version available');
+    if (!isMutableStrategyStatus(overview.status) && !versionId) {
+      throw new Error('Activated strategy history is immutable');
+    }
+
+    const existing = await this.repo.list(targetVersionId, 'editorial-policy');
+    for (const record of existing) {
+      const key = String(record.configuration?.systemKey ?? '');
+      if (key === 'policy.editorial-policy' && record.id) {
+        await this.repo.update(targetVersionId, 'editorial-policy', record.id, {
+          name: record.name,
+          description: record.description ?? '',
+          status: 'ARCHIVED',
+          priority: record.priority,
+          configuration: {
+            ...record.configuration,
+            archivedReason: 'Superseded by editorial charter chapters',
+          },
+          effectiveFrom: record.effectiveFrom ?? null,
+          effectiveTo: record.effectiveTo ?? null,
+        });
+      }
+    }
+
+    const live = (await this.repo.list(targetVersionId, 'editorial-policy')).filter(
+      (record) => record.status !== 'ARCHIVED',
+    );
+    const byKey = new Map(
+      live
+        .map((record) => [String(record.configuration?.systemKey ?? ''), record] as const)
+        .filter(([key]) => Boolean(key)),
+    );
+
+    let created = 0;
+    let updated = 0;
+    for (const policy of EDITORIAL_POLICY) {
+      const systemKey = String(policy.configuration.systemKey);
+      const prior = byKey.get(systemKey);
+      if (prior?.id) {
+        await this.repo.update(targetVersionId, 'editorial-policy', prior.id, {
+          ...policy,
+          id: prior.id,
+        });
+        updated += 1;
+      } else {
+        const record = await this.repo.create(targetVersionId, 'editorial-policy', policy);
+        if (record.id) byKey.set(systemKey, record);
+        created += 1;
+      }
+    }
+
+    await prisma.$executeRaw`
+      INSERT INTO strategy_audit_events(version_id, action, actor_type, new_value, reason)
+      VALUES (
+        CONVERT(uniqueidentifier, ${targetVersionId}),
+        ${'EDITORIAL_POLICY_RECONCILED'},
+        ${'SYSTEM'},
+        ${JSON.stringify({ created, updated, policyCount: EDITORIAL_POLICY.length })},
+        ${'Editorial & brand charter reconciled from system policy; no compliance scores fabricated'}
+      )
+    `;
+
+    return { created, updated, total: EDITORIAL_POLICY.length };
+  }
+
+  async reconcileFormats(versionId?: string) {
+    await this.repo.ensureDraft();
+    const overview = await this.repo.overview();
+    const targetVersionId = versionId ?? overview.versionId;
+    if (!targetVersionId) throw new Error('No strategy version available');
+    if (!isMutableStrategyStatus(overview.status) && !versionId) {
+      throw new Error('Activated strategy history is immutable');
+    }
+
+    const existing = await this.repo.list(targetVersionId, 'formats');
+    for (const record of existing) {
+      const key = String(record.configuration?.systemKey ?? '');
+      if (key === 'policy.formats' && record.id) {
+        await this.repo.update(targetVersionId, 'formats', record.id, {
+          name: record.name,
+          description: record.description ?? '',
+          status: 'ARCHIVED',
+          priority: record.priority,
+          configuration: {
+            ...record.configuration,
+            archivedReason: 'Superseded by content format production briefs',
+          },
+          effectiveFrom: record.effectiveFrom ?? null,
+          effectiveTo: record.effectiveTo ?? null,
+        });
+      }
+    }
+
+    const live = (await this.repo.list(targetVersionId, 'formats')).filter(
+      (record) => record.status !== 'ARCHIVED',
+    );
+    const byKey = new Map(
+      live
+        .map((record) => [String(record.configuration?.systemKey ?? ''), record] as const)
+        .filter(([key]) => Boolean(key)),
+    );
+
+    let created = 0;
+    let updated = 0;
+    for (const policy of FORMATS_POLICY) {
+      const systemKey = String(policy.configuration.systemKey);
+      const prior = byKey.get(systemKey);
+      if (prior?.id) {
+        await this.repo.update(targetVersionId, 'formats', prior.id, {
+          ...policy,
+          id: prior.id,
+        });
+        updated += 1;
+      } else {
+        const record = await this.repo.create(targetVersionId, 'formats', policy);
+        if (record.id) byKey.set(systemKey, record);
+        created += 1;
+      }
+    }
+
+    await prisma.$executeRaw`
+      INSERT INTO strategy_audit_events(version_id, action, actor_type, new_value, reason)
+      VALUES (
+        CONVERT(uniqueidentifier, ${targetVersionId}),
+        ${'FORMATS_POLICY_RECONCILED'},
+        ${'SYSTEM'},
+        ${JSON.stringify({ created, updated, policyCount: FORMATS_POLICY.length })},
+        ${'Content format production briefs reconciled from system policy; no utilisation metrics fabricated'}
+      )
+    `;
+
+    return { created, updated, total: FORMATS_POLICY.length };
+  }
+
+  async reconcileChannels(versionId?: string) {
+    await this.repo.ensureDraft();
+    const overview = await this.repo.overview();
+    const targetVersionId = versionId ?? overview.versionId;
+    if (!targetVersionId) throw new Error('No strategy version available');
+    if (!isMutableStrategyStatus(overview.status) && !versionId) {
+      throw new Error('Activated strategy history is immutable');
+    }
+
+    const existing = await this.repo.list(targetVersionId, 'channels');
+    for (const record of existing) {
+      const key = String(record.configuration?.systemKey ?? '');
+      if (key === 'policy.channels' && record.id) {
+        await this.repo.update(targetVersionId, 'channels', record.id, {
+          name: record.name,
+          description: record.description ?? '',
+          status: 'ARCHIVED',
+          priority: record.priority,
+          configuration: {
+            ...record.configuration,
+            archivedReason: 'Superseded by channel enablement profiles',
+          },
+          effectiveFrom: record.effectiveFrom ?? null,
+          effectiveTo: record.effectiveTo ?? null,
+        });
+      }
+    }
+
+    const live = (await this.repo.list(targetVersionId, 'channels')).filter(
+      (record) => record.status !== 'ARCHIVED',
+    );
+    const byKey = new Map(
+      live
+        .map((record) => [String(record.configuration?.systemKey ?? ''), record] as const)
+        .filter(([key]) => Boolean(key)),
+    );
+
+    let created = 0;
+    let updated = 0;
+    for (const policy of CHANNELS_POLICY) {
+      const systemKey = String(policy.configuration.systemKey);
+      const prior = byKey.get(systemKey);
+      if (prior?.id) {
+        await this.repo.update(targetVersionId, 'channels', prior.id, {
+          ...policy,
+          id: prior.id,
+        });
+        updated += 1;
+      } else {
+        const record = await this.repo.create(targetVersionId, 'channels', policy);
+        if (record.id) byKey.set(systemKey, record);
+        created += 1;
+      }
+    }
+
+    await prisma.$executeRaw`
+      INSERT INTO strategy_audit_events(version_id, action, actor_type, new_value, reason)
+      VALUES (
+        CONVERT(uniqueidentifier, ${targetVersionId}),
+        ${'CHANNELS_POLICY_RECONCILED'},
+        ${'SYSTEM'},
+        ${JSON.stringify({ created, updated, policyCount: CHANNELS_POLICY.length })},
+        ${'Channel enablement profiles reconciled; strategic enablement separated from provider availability; no reach metrics fabricated'}
+      )
+    `;
+
+    return { created, updated, total: CHANNELS_POLICY.length };
+  }
+
+  async reconcileLocalisation(versionId?: string) {
+    await this.repo.ensureDraft();
+    const overview = await this.repo.overview();
+    const targetVersionId = versionId ?? overview.versionId;
+    if (!targetVersionId) throw new Error('No strategy version available');
+    if (!isMutableStrategyStatus(overview.status) && !versionId) {
+      throw new Error('Activated strategy history is immutable');
+    }
+
+    const existing = await this.repo.list(targetVersionId, 'localisation');
+    for (const record of existing) {
+      const key = String(record.configuration?.systemKey ?? '');
+      if (key === 'policy.localisation' && record.id) {
+        await this.repo.update(targetVersionId, 'localisation', record.id, {
+          name: record.name,
+          description: record.description ?? '',
+          status: 'ARCHIVED',
+          priority: record.priority,
+          configuration: {
+            ...record.configuration,
+            archivedReason: 'Superseded by language & localisation kits',
+          },
+          effectiveFrom: record.effectiveFrom ?? null,
+          effectiveTo: record.effectiveTo ?? null,
+        });
+      }
+    }
+
+    const live = (await this.repo.list(targetVersionId, 'localisation')).filter(
+      (record) => record.status !== 'ARCHIVED',
+    );
+    const byKey = new Map(
+      live
+        .map((record) => [String(record.configuration?.systemKey ?? ''), record] as const)
+        .filter(([key]) => Boolean(key)),
+    );
+
+    let created = 0;
+    let updated = 0;
+    for (const policy of LOCALISATION_POLICY) {
+      const systemKey = String(policy.configuration.systemKey);
+      const prior = byKey.get(systemKey);
+      if (prior?.id) {
+        await this.repo.update(targetVersionId, 'localisation', prior.id, {
+          ...policy,
+          id: prior.id,
+        });
+        updated += 1;
+      } else {
+        const record = await this.repo.create(targetVersionId, 'localisation', policy);
+        if (record.id) byKey.set(systemKey, record);
+        created += 1;
+      }
+    }
+
+    await prisma.$executeRaw`
+      INSERT INTO strategy_audit_events(version_id, action, actor_type, new_value, reason)
+      VALUES (
+        CONVERT(uniqueidentifier, ${targetVersionId}),
+        ${'LOCALISATION_POLICY_RECONCILED'},
+        ${'SYSTEM'},
+        ${JSON.stringify({ created, updated, policyCount: LOCALISATION_POLICY.length })},
+        ${'Language & localisation kits reconciled; cultural adaptation beyond literal translation; no fluency scores fabricated'}
+      )
+    `;
+
+    return { created, updated, total: LOCALISATION_POLICY.length };
+  }
+
+  async reconcileSourcePolicy(versionId?: string) {
+    await this.repo.ensureDraft();
+    const overview = await this.repo.overview();
+    const targetVersionId = versionId ?? overview.versionId;
+    if (!targetVersionId) throw new Error('No strategy version available');
+    if (!isMutableStrategyStatus(overview.status) && !versionId) {
+      throw new Error('Activated strategy history is immutable');
+    }
+
+    const existing = await this.repo.list(targetVersionId, 'source-policy');
+    for (const record of existing) {
+      const key = String(record.configuration?.systemKey ?? '');
+      if (key === 'policy.source-policy' && record.id) {
+        await this.repo.update(targetVersionId, 'source-policy', record.id, {
+          name: record.name,
+          description: record.description ?? '',
+          status: 'ARCHIVED',
+          priority: record.priority,
+          configuration: {
+            ...record.configuration,
+            archivedReason: 'Superseded by evidence & source policy classes',
+          },
+          effectiveFrom: record.effectiveFrom ?? null,
+          effectiveTo: record.effectiveTo ?? null,
+        });
+      }
+    }
+
+    const live = (await this.repo.list(targetVersionId, 'source-policy')).filter(
+      (record) => record.status !== 'ARCHIVED',
+    );
+    const byKey = new Map(
+      live
+        .map((record) => [String(record.configuration?.systemKey ?? ''), record] as const)
+        .filter(([key]) => Boolean(key)),
+    );
+
+    let created = 0;
+    let updated = 0;
+    for (const policy of SOURCE_POLICY) {
+      const systemKey = String(policy.configuration.systemKey);
+      const prior = byKey.get(systemKey);
+      if (prior?.id) {
+        await this.repo.update(targetVersionId, 'source-policy', prior.id, {
+          ...policy,
+          id: prior.id,
+        });
+        updated += 1;
+      } else {
+        const record = await this.repo.create(targetVersionId, 'source-policy', policy);
+        if (record.id) byKey.set(systemKey, record);
+        created += 1;
+      }
+    }
+
+    await prisma.$executeRaw`
+      INSERT INTO strategy_audit_events(version_id, action, actor_type, new_value, reason)
+      VALUES (
+        CONVERT(uniqueidentifier, ${targetVersionId}),
+        ${'SOURCE_POLICY_RECONCILED'},
+        ${'SYSTEM'},
+        ${JSON.stringify({ created, updated, policyCount: SOURCE_POLICY.length })},
+        ${'Evidence & source policy classes reconciled; authority gates only; no fabricated authority scores'}
+      )
+    `;
+
+    return { created, updated, total: SOURCE_POLICY.length };
   }
 
   private async executeObjectivesRun(runId: string, versionId: string) {
