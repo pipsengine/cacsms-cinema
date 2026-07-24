@@ -181,6 +181,8 @@ export class StrategyRepository {
       blockers: map[key] ? 0 : 1,
       warnings: 0,
       missing: map[key] ? [] : ['At least one active record'],
+      recordCount: map[key] ?? 0,
+      lastValidatedAt: x.lastValidatedAt?.toISOString() ?? null,
     }));
 
     const readiness = Math.round(
@@ -451,18 +453,30 @@ export class StrategyRepository {
     const rows = await prisma.$queryRaw<
       Array<{
         id: string;
+        versionId: string | null;
         action: string;
         actorType: string;
-        createdAt: Date;
+        actorReference: string | null;
+        requestId: string | null;
+        correlationId: string | null;
+        previousValue: string | null;
+        newValue: string | null;
         reason: string | null;
+        createdAt: Date;
       }>
     >`
-      SELECT TOP 100
+      SELECT TOP 500
         CONVERT(varchar(36), id) AS id,
+        CONVERT(varchar(36), version_id) AS versionId,
         action,
         actor_type AS actorType,
-        created_at AS createdAt,
-        reason
+        actor_reference AS actorReference,
+        request_id AS requestId,
+        correlation_id AS correlationId,
+        previous_value AS previousValue,
+        new_value AS newValue,
+        reason,
+        created_at AS createdAt
       FROM strategy_audit_events
       WHERE version_id = CONVERT(uniqueidentifier, ${versionId})
       ORDER BY created_at DESC
@@ -470,10 +484,531 @@ export class StrategyRepository {
 
     return rows.map((row) => ({
       id: row.id,
+      versionId: row.versionId,
       action: row.action,
       actorType: row.actorType,
-      createdAt: row.createdAt.toISOString(),
+      actorReference: row.actorReference,
+      requestId: row.requestId,
+      correlationId: row.correlationId,
+      previousValue: row.previousValue,
+      newValue: row.newValue,
       reason: row.reason,
+      createdAt: row.createdAt.toISOString(),
     }));
   }
+
+  async listStrategyAudit(strategyId?: string) {
+    await this.ensureDraft();
+    let targetStrategyId = strategyId ?? null;
+    if (!targetStrategyId) {
+      const current = await prisma.$queryRaw<Array<{ strategyId: string }>>`
+        SELECT TOP 1 CONVERT(varchar(36), id) AS strategyId
+        FROM content_strategies
+        WHERE archived_at IS NULL
+      `;
+      targetStrategyId = current[0]?.strategyId ?? null;
+    }
+    if (!targetStrategyId) return [] as StrategyAuditEvent[];
+
+    const rows = await prisma.$queryRaw<
+      Array<{
+        id: string;
+        versionId: string | null;
+        versionNumber: number | null;
+        versionStatus: string | null;
+        action: string;
+        actorType: string;
+        actorReference: string | null;
+        requestId: string | null;
+        correlationId: string | null;
+        previousValue: string | null;
+        newValue: string | null;
+        reason: string | null;
+        createdAt: Date;
+      }>
+    >`
+      SELECT TOP 500
+        CONVERT(varchar(36), e.id) AS id,
+        CONVERT(varchar(36), e.version_id) AS versionId,
+        v.version_number AS versionNumber,
+        v.status AS versionStatus,
+        e.action,
+        e.actor_type AS actorType,
+        e.actor_reference AS actorReference,
+        e.request_id AS requestId,
+        e.correlation_id AS correlationId,
+        e.previous_value AS previousValue,
+        e.new_value AS newValue,
+        e.reason,
+        e.created_at AS createdAt
+      FROM strategy_audit_events e
+      INNER JOIN content_strategy_versions v ON v.id = e.version_id
+      WHERE v.strategy_id = CONVERT(uniqueidentifier, ${targetStrategyId})
+      ORDER BY e.created_at DESC
+    `;
+
+    return rows.map((row) => ({
+      id: row.id,
+      versionId: row.versionId,
+      versionNumber: row.versionNumber != null ? Number(row.versionNumber) : null,
+      versionStatus: row.versionStatus,
+      action: row.action,
+      actorType: row.actorType,
+      actorReference: row.actorReference,
+      requestId: row.requestId,
+      correlationId: row.correlationId,
+      previousValue: row.previousValue,
+      newValue: row.newValue,
+      reason: row.reason,
+      createdAt: row.createdAt.toISOString(),
+    }));
+  }
+
+  async latestValidation(versionId: string) {
+    const runs = await prisma.$queryRaw<
+      Array<{
+        id: string;
+        status: string;
+        startedAt: Date;
+        completedAt: Date | null;
+        summaryJson: string | null;
+      }>
+    >`
+      SELECT TOP 1
+        CONVERT(varchar(36), id) AS id,
+        status,
+        started_at AS startedAt,
+        completed_at AS completedAt,
+        summary_json AS summaryJson
+      FROM strategy_validation_runs
+      WHERE version_id = CONVERT(uniqueidentifier, ${versionId})
+      ORDER BY started_at DESC
+    `;
+
+    const run = runs[0];
+    if (!run) {
+      return { run: null, results: [] };
+    }
+
+    const results = await prisma.$queryRaw<
+      Array<{
+        id: string;
+        ruleCode: string;
+        ruleVersion: number;
+        severity: string;
+        passed: boolean | number;
+        blocking: boolean | number;
+        sectionKey: string | null;
+        explanation: string;
+        recommendation: string | null;
+        checkedAt: Date;
+      }>
+    >`
+      SELECT
+        CONVERT(varchar(36), id) AS id,
+        rule_code AS ruleCode,
+        rule_version AS ruleVersion,
+        severity,
+        passed,
+        blocking,
+        section_key AS sectionKey,
+        explanation,
+        recommendation,
+        checked_at AS checkedAt
+      FROM strategy_validation_results
+      WHERE run_id = CONVERT(uniqueidentifier, ${run.id})
+      ORDER BY
+        CASE WHEN passed = 0 THEN 0 ELSE 1 END,
+        CASE severity
+          WHEN 'CRITICAL' THEN 0
+          WHEN 'WARNING' THEN 1
+          WHEN 'INFO' THEN 2
+          ELSE 3
+        END,
+        rule_code
+    `;
+
+    let summary: Record<string, unknown> | null = null;
+    if (run.summaryJson) {
+      try {
+        summary = JSON.parse(run.summaryJson) as Record<string, unknown>;
+      } catch {
+        summary = null;
+      }
+    }
+
+    return {
+      run: {
+        id: run.id,
+        status: run.status,
+        startedAt: run.startedAt.toISOString(),
+        completedAt: run.completedAt?.toISOString() ?? null,
+        summary,
+      },
+      results: results.map((row) => ({
+        id: row.id,
+        ruleCode: row.ruleCode,
+        ruleVersion: Number(row.ruleVersion),
+        severity: row.severity,
+        passed: Boolean(row.passed),
+        blocking: Boolean(row.blocking),
+        sectionKey: row.sectionKey,
+        explanation: row.explanation,
+        recommendation: row.recommendation,
+        checkedAt: row.checkedAt.toISOString(),
+      })),
+    };
+  }
+
+  async listVersions(strategyId?: string) {
+    await this.ensureDraft();
+
+    let targetStrategyId = strategyId ?? null;
+    let currentVersionId: string | null = null;
+    if (!targetStrategyId) {
+      const current = await prisma.$queryRaw<
+        Array<{ strategyId: string; versionId: string; status: string }>
+      >`
+        SELECT TOP 1
+          CONVERT(varchar(36), s.id) AS strategyId,
+          CONVERT(varchar(36), v.id) AS versionId,
+          v.status AS status
+        FROM content_strategies s
+        JOIN content_strategy_versions v ON v.strategy_id = s.id
+        WHERE s.archived_at IS NULL
+        ORDER BY
+          CASE v.status
+            WHEN 'ACTIVE' THEN 0
+            WHEN 'DRAFT' THEN 1
+            WHEN 'READY' THEN 2
+            ELSE 3
+          END,
+          v.version_number DESC
+      `;
+      targetStrategyId = current[0]?.strategyId ?? null;
+      currentVersionId = current[0]?.versionId ?? null;
+    }
+    if (!targetStrategyId) {
+      return { strategyId: null as string | null, currentVersionId: null, versions: [] as StrategyVersionSummary[] };
+    }
+
+    const rows = await prisma.$queryRaw<
+      Array<{
+        id: string;
+        versionNumber: number;
+        status: string;
+        effectiveDate: Date | null;
+        lastValidatedAt: Date | null;
+        createdAt: Date;
+        updatedAt: Date;
+        checksum: string | null;
+        recordCount: number | bigint;
+        sectionCount: number | bigint;
+      }>
+    >`
+      SELECT
+        CONVERT(varchar(36), v.id) AS id,
+        v.version_number AS versionNumber,
+        v.status AS status,
+        v.effective_date AS effectiveDate,
+        v.last_validated_at AS lastValidatedAt,
+        v.created_at AS createdAt,
+        v.updated_at AS updatedAt,
+        p.checksum AS checksum,
+        (
+          SELECT COUNT(*)
+          FROM strategy_records r
+          WHERE r.version_id = v.id AND r.archived_at IS NULL
+        ) AS recordCount,
+        (
+          SELECT COUNT(DISTINCT r2.section_key)
+          FROM strategy_records r2
+          WHERE r2.version_id = v.id AND r2.archived_at IS NULL
+        ) AS sectionCount
+      FROM content_strategy_versions v
+      LEFT JOIN strategy_packages p ON p.version_id = v.id
+      WHERE v.strategy_id = CONVERT(uniqueidentifier, ${targetStrategyId})
+      ORDER BY v.version_number DESC
+    `;
+
+    const versions: StrategyVersionSummary[] = [];
+    for (const row of rows) {
+      const sections = await prisma.$queryRaw<
+        Array<{ section_key: string; total: number | bigint }>
+      >`
+        SELECT section_key, COUNT(*) AS total
+        FROM strategy_records
+        WHERE version_id = CONVERT(uniqueidentifier, ${row.id})
+          AND archived_at IS NULL
+        GROUP BY section_key
+      `;
+      const audit = await prisma.$queryRaw<
+        Array<{ action: string; actorType: string; createdAt: Date; reason: string | null }>
+      >`
+        SELECT TOP 1
+          action,
+          actor_type AS actorType,
+          created_at AS createdAt,
+          reason
+        FROM strategy_audit_events
+        WHERE version_id = CONVERT(uniqueidentifier, ${row.id})
+        ORDER BY created_at ASC
+      `;
+      versions.push({
+        id: row.id,
+        versionNumber: Number(row.versionNumber),
+        status: row.status as StrategyStatus,
+        effectiveDate: row.effectiveDate?.toISOString() ?? null,
+        lastValidatedAt: row.lastValidatedAt?.toISOString() ?? null,
+        createdAt: row.createdAt.toISOString(),
+        updatedAt: row.updatedAt.toISOString(),
+        checksum: row.checksum,
+        recordCount: Number(row.recordCount),
+        sectionCount: Number(row.sectionCount),
+        sectionCounts: Object.fromEntries(
+          sections.map((item) => [item.section_key, Number(item.total)]),
+        ),
+        createdBy: audit[0]?.actorType ?? 'SYSTEM',
+        createAction: audit[0]?.action ?? null,
+        createReason: audit[0]?.reason ?? null,
+      });
+    }
+
+    return { strategyId: targetStrategyId, currentVersionId, versions };
+  }
+
+  async compareVersions(leftId: string, rightId: string) {
+    const [leftSections, rightSections] = await Promise.all([
+      this.listSectionFingerprints(leftId),
+      this.listSectionFingerprints(rightId),
+    ]);
+
+    const sectionKeys = [...new Set([...leftSections.keys(), ...rightSections.keys()])].sort();
+    const modules = sectionKeys.map((section) => {
+      const left = leftSections.get(section) ?? new Set<string>();
+      const right = rightSections.get(section) ?? new Set<string>();
+      const added = [...right].filter((key) => !left.has(key));
+      const removed = [...left].filter((key) => !right.has(key));
+      const shared = [...right].filter((key) => left.has(key));
+      return {
+        section,
+        label: labelForSection(section),
+        leftCount: left.size,
+        rightCount: right.size,
+        added,
+        removed,
+        unchanged: shared.length,
+        modified: 0,
+      };
+    });
+
+    return {
+      leftId,
+      rightId,
+      modules,
+      totals: {
+        added: modules.reduce((sum, item) => sum + item.added.length, 0),
+        removed: modules.reduce((sum, item) => sum + item.removed.length, 0),
+        unchanged: modules.reduce((sum, item) => sum + item.unchanged, 0),
+      },
+    };
+  }
+
+  private async listSectionFingerprints(versionId: string) {
+    const rows = await prisma.$queryRaw<
+      Array<{ section_key: string; record_name: string; configuration_json: string }>
+    >`
+      SELECT section_key, record_name, configuration_json
+      FROM strategy_records
+      WHERE version_id = CONVERT(uniqueidentifier, ${versionId})
+        AND archived_at IS NULL
+    `;
+    const map = new Map<string, Set<string>>();
+    for (const row of rows) {
+      let systemKey = '';
+      try {
+        const config = JSON.parse(row.configuration_json || '{}') as { systemKey?: string };
+        systemKey = String(config.systemKey ?? '');
+      } catch {
+        systemKey = '';
+      }
+      const fingerprint = systemKey || row.record_name;
+      const set = map.get(row.section_key) ?? new Set<string>();
+      set.add(fingerprint);
+      map.set(row.section_key, set);
+    }
+    return map;
+  }
+
+  async rollbackToDraft(sourceVersionId: string) {
+    await this.ensureDraft();
+    return prisma.$transaction(async (tx) => {
+      const sources = await tx.$queryRaw<
+        Array<{
+          id: string;
+          strategyId: string;
+          status: string;
+          versionNumber: number;
+        }>
+      >`
+        SELECT
+          CONVERT(varchar(36), id) AS id,
+          CONVERT(varchar(36), strategy_id) AS strategyId,
+          status,
+          version_number AS versionNumber
+        FROM content_strategy_versions WITH (UPDLOCK, HOLDLOCK)
+        WHERE id = CONVERT(uniqueidentifier, ${sourceVersionId})
+      `;
+      const source = sources[0];
+      if (!source) throw new Error('Source version not found');
+
+      const mutable = await tx.$queryRaw<Array<{ id: string; status: string }>>`
+        SELECT CONVERT(varchar(36), id) AS id, status
+        FROM content_strategy_versions
+        WHERE strategy_id = CONVERT(uniqueidentifier, ${source.strategyId})
+          AND status IN ('DRAFT','INVALID','READY','IN_REVIEW','BLOCKED')
+      `;
+      if (mutable[0]) {
+        throw new Error(
+          `A mutable ${mutable[0].status} version already exists. Resolve or archive it before rollback.`,
+        );
+      }
+
+      const maxRows = await tx.$queryRaw<Array<{ maxVersion: number | null }>>`
+        SELECT MAX(version_number) AS maxVersion
+        FROM content_strategy_versions
+        WHERE strategy_id = CONVERT(uniqueidentifier, ${source.strategyId})
+      `;
+      const nextNumber = Number(maxRows[0]?.maxVersion ?? 0) + 1;
+      const newVersionId = randomUUID();
+
+      await tx.$executeRaw`
+        INSERT INTO content_strategy_versions(id, strategy_id, version_number, status)
+        VALUES (
+          CONVERT(uniqueidentifier, ${newVersionId}),
+          CONVERT(uniqueidentifier, ${source.strategyId}),
+          ${nextNumber},
+          ${'DRAFT'}
+        )
+      `;
+
+      const records = await tx.$queryRaw<
+        Array<{
+          section_key: string;
+          record_name: string;
+          record_type: string | null;
+          status: string;
+          priority: number;
+          configuration_json: string;
+          effective_from: Date | null;
+          effective_to: Date | null;
+        }>
+      >`
+        SELECT
+          section_key,
+          record_name,
+          record_type,
+          status,
+          priority,
+          configuration_json,
+          effective_from,
+          effective_to
+        FROM strategy_records
+        WHERE version_id = CONVERT(uniqueidentifier, ${sourceVersionId})
+          AND archived_at IS NULL
+      `;
+
+      for (const record of records) {
+        const recordId = randomUUID();
+        const effectiveFrom = record.effective_from ? record.effective_from.toISOString() : '';
+        const effectiveTo = record.effective_to ? record.effective_to.toISOString() : '';
+        await tx.$executeRaw`
+          INSERT INTO strategy_records(
+            id, version_id, section_key, record_name, record_type, status, priority, configuration_json,
+            effective_from, effective_to
+          ) VALUES (
+            CONVERT(uniqueidentifier, ${recordId}),
+            CONVERT(uniqueidentifier, ${newVersionId}),
+            ${record.section_key},
+            ${record.record_name},
+            ${record.record_type},
+            ${record.status},
+            ${Number(record.priority)},
+            ${record.configuration_json},
+            CASE WHEN ${effectiveFrom} = '' THEN NULL ELSE CONVERT(datetime2, ${effectiveFrom}) END,
+            CASE WHEN ${effectiveTo} = '' THEN NULL ELSE CONVERT(datetime2, ${effectiveTo}) END
+          )
+        `;
+      }
+
+      await tx.$executeRaw`
+        INSERT INTO strategy_audit_events(version_id, action, actor_type, new_value, reason)
+        VALUES (
+          CONVERT(uniqueidentifier, ${newVersionId}),
+          ${'ROLLBACK_DRAFT_CREATED'},
+          ${'DEVELOPMENT_USER'},
+          ${JSON.stringify({
+            sourceVersionId,
+            sourceVersionNumber: Number(source.versionNumber),
+            clonedRecords: records.length,
+          })},
+          ${`Rollback draft cloned from version ${source.versionNumber}; active history remains immutable`}
+        )
+      `;
+
+      return {
+        id: newVersionId,
+        versionNumber: nextNumber,
+        status: 'DRAFT' as const,
+        sourceVersionId,
+        clonedRecords: records.length,
+      };
+    });
+  }
 }
+
+export type StrategyAuditEvent = {
+  id: string;
+  versionId: string | null;
+  versionNumber?: number | null;
+  versionStatus?: string | null;
+  action: string;
+  actorType: string;
+  actorReference: string | null;
+  requestId: string | null;
+  correlationId: string | null;
+  previousValue: string | null;
+  newValue: string | null;
+  reason: string | null;
+  createdAt: string;
+};
+
+export type StrategyVersionSummary = {
+  id: string;
+  versionNumber: number;
+  status: StrategyStatus;
+  effectiveDate: string | null;
+  lastValidatedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  checksum: string | null;
+  recordCount: number;
+  sectionCount: number;
+  sectionCounts: Record<string, number>;
+  createdBy: string;
+  createAction: string | null;
+  createReason: string | null;
+};
+
+export type StrategyValidationResult = {
+  id: string;
+  ruleCode: string;
+  ruleVersion: number;
+  severity: string;
+  passed: boolean;
+  blocking: boolean;
+  sectionKey: string | null;
+  explanation: string;
+  recommendation: string | null;
+  checkedAt: string;
+};

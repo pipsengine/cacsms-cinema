@@ -3,6 +3,10 @@ import type {
   QualificationOverview,
   SectionKey,
 } from '@/lib/idea-qualification/contracts';
+import type { IntelligenceIntakeOverview } from '@/lib/idea-qualification/intake';
+import type { CandidatePoolOverview } from '@/lib/idea-qualification/candidate-pool';
+import type { EvidenceSufficiencyOverview } from '@/lib/idea-qualification/evidence';
+import type { StrategicFitOverview } from '@/lib/idea-qualification/strategic-fit';
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`/api${path}`, {
@@ -27,6 +31,13 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
 export const qualificationApi = {
   overview: () => request<QualificationOverview>('/idea-qualification/overview'),
+  intake: () => request<IntelligenceIntakeOverview>('/idea-qualification/intake'),
+  candidatePool: () =>
+    request<CandidatePoolOverview>('/idea-qualification/candidate-pool'),
+  evidence: () =>
+    request<EvidenceSufficiencyOverview>('/idea-qualification/evidence'),
+  strategicFit: () =>
+    request<StrategicFitOverview>('/idea-qualification/strategic-fit'),
   list: (section: SectionKey) =>
     request<Candidate[]>(`/idea-qualification/${section}`),
   run: () =>

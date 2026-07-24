@@ -86,6 +86,9 @@ export class ContentLifecycleOrchestrator {
     await service.reconcileChannels(overview.versionId);
     await service.reconcileLocalisation(overview.versionId);
     await service.reconcileSourcePolicy(overview.versionId);
+    await service.reconcileRiskPolicy(overview.versionId);
+    await service.reconcileSelectionThresholds(overview.versionId);
+    await service.reconcilePortfolio(overview.versionId);
     await this.ensureMandatorySectionStubs(overview.versionId);
 
     await service.validate(overview.versionId, `${cycleKey}-validate`);
@@ -109,7 +112,10 @@ export class ContentLifecycleOrchestrator {
         section === 'formats' ||
         section === 'channels' ||
         section === 'localisation' ||
-        section === 'source-policy'
+        section === 'source-policy' ||
+        section === 'risk-policy' ||
+        section === 'selection-thresholds' ||
+        section === 'portfolio'
       ) {
         continue;
       }
@@ -137,6 +143,8 @@ export class ContentLifecycleOrchestrator {
   private static async advanceContentIntelligence(cycleKey: string) {
     const service = new IntelligenceService();
     await service.consumeStrategy({});
+    const { reconcileSources } = await import('@/lib/content-intelligence/sources');
+    await reconcileSources();
     return service.startRun(`${cycleKey}-ci`);
   }
 

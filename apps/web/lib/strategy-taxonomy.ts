@@ -85,3 +85,124 @@ export function isBaselineStub(record: StrategyRecord): boolean {
 export function fieldLabel(key: string): string {
   return key.replace(/([A-Z])/g, ' $1').replace(/^./, (char) => char.toUpperCase());
 }
+
+export function nodeTypeOf(record: StrategyRecord): string {
+  return configDisplay(record.configuration, 'nodeType') || 'node';
+}
+
+export type TaxonomyQuality = {
+  orphanIds: string[];
+  circularIds: string[];
+  duplicateIds: string[];
+  stubCount: number;
+  rootCount: number;
+  maxDepth: number;
+  validEdgeCount: number;
+  invalidParentCount: number;
+  issueCount: number;
+};
+
+/** Derive hierarchy quality metrics from persisted parentId links only. */
+export function analyzeTaxonomyQuality(records: StrategyRecord[]): TaxonomyQuality {
+  const withIds = records.filter((record): record is StrategyRecord & { id: string } =>
+    Boolean(record.id),
+  );
+  const byId = new Map(withIds.map((record) => [record.id, record]));
+  const orphanIds: string[] = [];
+  const circularIds: string[] = [];
+  let validEdgeCount = 0;
+  let invalidParentCount = 0;
+
+  for (const record of withIds) {
+    const parent = parentIdOf(record);
+    if (!parent) continue;
+    if (!byId.has(parent)) {
+      orphanIds.push(record.id);
+      invalidParentCount += 1;
+      continue;
+    }
+    validEdgeCount += 1;
+    const seen = new Set<string>([record.id]);
+    let cursor: string | null = parent;
+    while (cursor) {
+      if (seen.has(cursor)) {
+        circularIds.push(record.id);
+        break;
+      }
+      seen.add(cursor);
+      const next = byId.get(cursor);
+      cursor = next ? parentIdOf(next) : null;
+      if (cursor && !byId.has(cursor)) break;
+    }
+  }
+
+  const nameBuckets = new Map<string, string[]>();
+  for (const record of withIds) {
+    const key = `${record.name.trim().toLowerCase()}::${nodeTypeOf(record).toLowerCase()}`;
+    const bucket = nameBuckets.get(key) ?? [];
+    bucket.push(record.id);
+    nameBuckets.set(key, bucket);
+  }
+  const duplicateIds = [...nameBuckets.values()].filter((ids) => ids.length > 1).flat();
+
+  const tree = buildTaxonomyTree(records);
+  let maxDepth = 0;
+  function walkDepth(nodes: TaxonomyTreeNode[]) {
+    for (const node of nodes) {
+      maxDepth = Math.max(maxDepth, node.depth);
+      walkDepth(node.children);
+    }
+  }
+  walkDepth(tree);
+
+  const uniqueIssues = new Set([...orphanIds, ...circularIds, ...duplicateIds]);
+  return {
+    orphanIds,
+    circularIds,
+    duplicateIds,
+    stubCount: records.filter(isBaselineStub).length,
+    rootCount: tree.length,
+    maxDepth,
+    validEdgeCount,
+    invalidParentCount,
+    issueCount: uniqueIssues.size,
+  };
+}
+
+export function ancestryPath(
+  record: StrategyRecord,
+  records: StrategyRecord[],
+): StrategyRecord[] {
+  const byId = new Map(
+    records.filter((item): item is StrategyRecord & { id: string } => Boolean(item.id)).map((item) => [
+      item.id,
+      item,
+    ]),
+  );
+  const path: StrategyRecord[] = [];
+  const seen = new Set<string>();
+  let cursor: StrategyRecord | undefined = record;
+  while (cursor?.id) {
+    if (seen.has(cursor.id)) break;
+    seen.add(cursor.id);
+    path.unshift(cursor);
+    const parent = parentIdOf(cursor);
+    cursor = parent ? byId.get(parent) : undefined;
+  }
+  return path;
+}
+
+export function childRecords(parentId: string, records: StrategyRecord[]): StrategyRecord[] {
+  return records
+    .filter((record) => parentIdOf(record) === parentId)
+    .slice()
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+export function siblingRecords(record: StrategyRecord, records: StrategyRecord[]): StrategyRecord[] {
+  const parent = parentIdOf(record);
+  return records
+    .filter((item) => item.id !== record.id && parentIdOf(item) === parent)
+    .slice()
+    .sort((a, b) => a.name.localeCompare(b.name));
+}

@@ -43,6 +43,21 @@ export const sectionKeys = [
 ] as const;
 export type SectionKey = (typeof sectionKeys)[number];
 
+export type IntelligencePipelineStage = {
+  stage: string;
+  label: string;
+  status: string;
+  count: number;
+};
+
+export type IntelligenceAuditEvent = {
+  id: string;
+  action: string;
+  actorType: string;
+  createdAt: string;
+  reason: string | null;
+};
+
 export type IntelligenceOverview = {
   available: boolean;
   reason?: string;
@@ -56,10 +71,15 @@ export type IntelligenceOverview = {
     id: string;
     status: string;
     startedAt: string;
+    completedAt?: string | null;
+    failureReason?: string | null;
   };
   metrics?: Record<string, number>;
-  pipeline?: Array<{ stage: string; status: string; count: number }>;
+  pipeline?: IntelligencePipelineStage[];
+  opportunities?: Opportunity[];
   blockers?: Array<{ id: string; severity: string; message: string }>;
+  audit?: IntelligenceAuditEvent[];
+  readiness?: number;
   lastUpdated?: string;
 };
 

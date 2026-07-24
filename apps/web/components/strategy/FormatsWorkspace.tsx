@@ -1,288 +1,1111 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { ShieldAlert } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { motion, useReducedMotion } from 'motion/react';
+import {
+  Activity,
+  AlertTriangle,
+  BrainCircuit,
+  CheckCircle2,
+  CircleDot,
+  Clapperboard,
+  Compass,
+  Film,
+  Gauge,
+  GitBranch,
+  LayoutTemplate,
+  MonitorPlay,
+  ShieldAlert,
+  Sparkles,
+  Timer,
+} from 'lucide-react';
 import type { StrategyOverview, StrategyRecord } from '@/lib/strategy/contracts';
 import { strategyApi } from '@/apps/web/lib/strategy-api';
 import {
   aspectList,
   CALL_SHEET_FIELDS,
+  categoryLabel,
   configDisplay,
   durationBounds,
+  fieldLabel,
+  filterFormatRecords,
+  formatCategory,
+  formatCoverage,
   formatDurationLabel,
+  formatIssues,
+  formatSubtitle,
   isFormatPolicyProfile,
   isFormatStub,
-  sortFormatsByDuration,
+  PLATFORM_FIELDS,
+  PRODUCTION_FIELDS,
+  SPEC_FIELDS,
+  splitList,
   timelinePercent,
   TIMELINE_MAX_SEC,
   TIMELINE_MIN_SEC,
+  type FormatFilter,
 } from '@/apps/web/lib/strategy-formats';
-import styles from './formats.module.css';
+import styles from './formats-intel.module.css';
 
-function relativeRefresh(iso: string | null, now: number) {
-  if (!iso) return '—';
-  const seconds = Math.max(0, Math.round((now - new Date(iso).getTime()) / 1000));
-  if (seconds < 60) return `${seconds}s ago`;
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes}m ago`;
-  return `${Math.floor(minutes / 60)}h ago`;
+type TabId =
+  | 'overview'
+  | 'specs'
+  | 'production'
+  | 'platforms'
+  | 'reasoning'
+  | 'dependencies'
+  | 'history'
+  | 'audit';
+
+type AuditRow = {
+  id: string;
+  action: string;
+  actorType: string;
+  createdAt: string;
+  reason: string | null;
+};
+
+const TABS: Array<{ id: TabId; label: string }> = [
+  { id: 'overview', label: 'Overview' },
+  { id: 'specs', label: 'Format Specifications' },
+  { id: 'production', label: 'Production Workflow' },
+  { id: 'platforms', label: 'Platform Compatibility' },
+  { id: 'reasoning', label: 'AI Reasoning' },
+  { id: 'dependencies', label: 'Dependencies' },
+  { id: 'history', label: 'History' },
+  { id: 'audit', label: 'Audit' },
+];
+
+const LIFECYCLE = [
+  { key: 'discover', label: 'Discover', icon: Compass },
+  { key: 'classify', label: 'Classify', icon: LayoutTemplate },
+  { key: 'validate', label: 'Validate', icon: CheckCircle2 },
+  { key: 'optimize', label: 'Optimize', icon: Gauge },
+  { key: 'schedule', label: 'Schedule', icon: Timer },
+  { key: 'persist', label: 'Persist', icon: CircleDot },
+  { key: 'handoff', label: 'Handoff', icon: GitBranch },
+] as const;
+
+function statusTone(status?: string) {
+  switch (status) {
+    case 'ACTIVE':
+    case 'READY':
+    case 'COMPLETED':
+    case 'RUNNING':
+    case 'Completed':
+    case 'short_form':
+    case 'explainer':
+      return styles.toneReady;
+    case 'INVALID':
+    case 'BLOCKED':
+    case 'FAILED':
+    case 'Failed':
+      return styles.toneBlocked;
+    case 'QUEUED':
+    case 'PAUSED':
+    case 'WARNING':
+    case 'Running':
+    case 'lesson':
+    case 'other':
+      return styles.toneWarning;
+    default:
+      return styles.toneDraft;
+  }
 }
 
-function aspectBoxStyle(ratio: string): { width: number; height: number } {
-  const compact = ratio.replace(/\s/g, '');
-  if (compact.includes('9:16')) return { width: 28, height: 50 };
-  if (compact.includes('1:1')) return { width: 40, height: 40 };
-  if (compact.includes('4:3')) return { width: 48, height: 36 };
-  if (compact.includes('2.39') || compact.includes('2.35')) return { width: 64, height: 28 };
-  return { width: 56, height: 32 };
+function display(value?: string | null) {
+  if (!value) return '—';
+  if (value === 'UNMEASURED') return 'UNMEASURED';
+  return value;
+}
+
+function sparkBars(seed: number) {
+  return [4, 7, 5, 9, 6, 10, 8].map((base, index) => Math.max(3, ((base + seed + index * 2) % 10) + 3));
+}
+
+function lifecycleState(
+  index: number,
+  systemRunning: boolean,
+  runStatus?: string | null,
+  versionStatus?: string,
+  formatCount?: number,
+) {
+  if ((formatCount ?? 0) > 0 && (versionStatus === 'ACTIVE' || versionStatus === 'READY')) {
+    return 'done';
+  }
+  if ((formatCount ?? 0) > 0) {
+    return index <= 5 ? 'done' : index === 6 ? 'active' : 'pending';
+  }
+  if (runStatus === 'RUNNING' || runStatus === 'QUEUED' || systemRunning) {
+    if (index === 0) return 'active';
+    return 'pending';
+  }
+  if (versionStatus === 'DRAFT' || versionStatus === 'INVALID') {
+    return index === 0 ? 'active' : 'pending';
+  }
+  return 'pending';
 }
 
 export function FormatsWorkspace() {
-  const loadSeq = useRef(0);
-  const abortRef = useRef<AbortController | null>(null);
-  const selectedIdRef = useRef<string | null>(null);
-
+  const reduceMotion = useReducedMotion();
   const [overview, setOverview] = useState<StrategyOverview | null>(null);
   const [records, setRecords] = useState<StrategyRecord[]>([]);
+  const [audit, setAudit] = useState<AuditRow[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [initialLoading, setInitialLoading] = useState(true);
-  const [softError, setSoftError] = useState('');
-  const [hardError, setHardError] = useState('');
+  const [query, setQuery] = useState('');
+  const [filter, setFilter] = useState<FormatFilter>('all');
+  const [tab, setTab] = useState<TabId>('overview');
+  const [busy, setBusy] = useState(true);
+  const [error, setError] = useState('');
   const [systemState, setSystemState] = useState('UNAVAILABLE');
-  const [lastLoadedAt, setLastLoadedAt] = useState<string | null>(null);
-  const [now, setNow] = useState(() => Date.now());
+  const [syncedAt, setSyncedAt] = useState<string | null>(null);
 
+  const run = overview?.autonomyRun ?? null;
   const systemRunning = systemState === 'RUNNING';
-  selectedIdRef.current = selectedId;
 
-  async function load() {
-    const seq = ++loadSeq.current;
-    abortRef.current?.abort();
-    const controller = new AbortController();
-    abortRef.current = controller;
-    if (!overview) setInitialLoading(true);
-
+  async function load(preferId?: string | null) {
+    setBusy(true);
+    setError('');
     try {
       const [next, dashboard] = await Promise.all([
         strategyApi.overview(),
-        fetch('/api/dashboard', { cache: 'no-store', signal: controller.signal }).then(
-          async (response) => {
-            if (!response.ok) return null;
-            return response.json() as Promise<{ system?: { controlState?: string } }>;
-          },
-        ),
+        fetch('/api/dashboard', { cache: 'no-store' }).then(async (response) => {
+          if (!response.ok) return null;
+          return response.json() as Promise<{ system?: { controlState?: string } }>;
+        }),
       ]);
-      if (seq !== loadSeq.current || controller.signal.aborted) return;
-
       setOverview(next);
       setSystemState(dashboard?.system?.controlState ?? 'UNAVAILABLE');
-      setHardError('');
-
+      setSyncedAt(new Date().toISOString());
       if (!next.available || !next.versionId) {
         setRecords([]);
-        setSelectedId(null);
-        setSoftError(next.reason || 'Strategy version unavailable');
-        setLastLoadedAt(new Date().toISOString());
+        setAudit([]);
         return;
       }
-
-      const list = (await strategyApi.list(next.versionId, 'formats')).filter(
-        (record) => record.status !== 'ARCHIVED',
-      );
-      if (seq !== loadSeq.current || controller.signal.aborted) return;
-
-      setRecords(list);
-      setSoftError('');
-      setLastLoadedAt(new Date().toISOString());
-
-      const prefer = selectedIdRef.current;
-      if (!(prefer && list.some((item) => item.id === prefer))) {
-        const ordered = sortFormatsByDuration(list.filter(isFormatPolicyProfile));
-        setSelectedId(ordered[0]?.id ?? list[0]?.id ?? null);
-      }
+      const [list, auditRows] = await Promise.all([
+        strategyApi.list(next.versionId, 'formats'),
+        strategyApi.audit(next.versionId).catch(() => [] as AuditRow[]),
+      ]);
+      const live = list.filter((record) => record.status !== 'ARCHIVED');
+      setRecords(live);
+      setAudit(auditRows);
+      const targetId = preferId ?? selectedId;
+      const selected = targetId ? live.find((item) => item.id === targetId) : live[0];
+      setSelectedId(selected?.id ?? null);
     } catch (err) {
-      if (controller.signal.aborted || seq !== loadSeq.current) return;
-      const message = err instanceof Error ? err.message : 'Unavailable';
-      if (overview) setSoftError(`Refresh failed — showing last good data. ${message}`);
-      else setHardError(message);
+      setError(err instanceof Error ? err.message : 'Unavailable');
     } finally {
-      if (seq === loadSeq.current) setInitialLoading(false);
+      setBusy(false);
     }
   }
 
   useEffect(() => {
-    const t = window.setTimeout(() => void load(), 0);
-    return () => {
-      window.clearTimeout(t);
-      abortRef.current?.abort();
-    };
+    const timer = window.setTimeout(() => {
+      void load();
+    }, 0);
+    return () => window.clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
-    const t = window.setInterval(() => void load(), systemRunning ? 3000 : 10000);
-    return () => window.clearInterval(t);
+    const timer = window.setInterval(() => {
+      void load(selectedId);
+    }, systemRunning ? 3000 : 10000);
+    return () => window.clearInterval(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [systemRunning]);
+  }, [systemRunning, selectedId]);
 
   useEffect(() => {
-    const onControl = () => void load();
-    window.addEventListener('cacsms:system-control-changed', onControl);
-    return () => window.removeEventListener('cacsms:system-control-changed', onControl);
+    const onControlChanged = () => void load(selectedId);
+    window.addEventListener('cacsms:system-control-changed', onControlChanged);
+    return () => window.removeEventListener('cacsms:system-control-changed', onControlChanged);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [selectedId]);
 
-  useEffect(() => {
-    const t = window.setInterval(() => setNow(Date.now()), 1000);
-    return () => window.clearInterval(t);
-  }, []);
+  const policyFormats = useMemo(() => records.filter(isFormatPolicyProfile), [records]);
+  const issues = useMemo(() => formatIssues(records), [records]);
+  const activeFormats = records.filter(
+    (item) => item.status === 'ACTIVE' || item.status === 'READY',
+  ).length;
+  const avgCoverage = records.length
+    ? Math.round(records.reduce((sum, item) => sum + formatCoverage(item), 0) / records.length)
+    : 0;
+  const pendingOptimizations =
+    issues.thinSpecs.length + issues.missingChannels.length + issues.missingAspect.length;
 
-  const policy = useMemo(() => records.filter(isFormatPolicyProfile), [records]);
-  const policyReady = policy.length > 0;
-  const stubOnly = records.length > 0 && !policyReady && records.every(isFormatStub);
-  const formats = useMemo(
-    () => sortFormatsByDuration(policyReady ? policy : records.filter((r) => !isFormatStub(r))),
-    [policy, policyReady, records],
+  const kpis = useMemo(
+    () => [
+      {
+        label: 'Content Formats',
+        value: String(policyFormats.length || records.length),
+        meta: 'Persisted format strategies',
+        accent: '#2563EB',
+        icon: Clapperboard,
+        bars: sparkBars(policyFormats.length || records.length),
+      },
+      {
+        label: 'Active Formats',
+        value: String(activeFormats),
+        meta: 'ACTIVE / READY records',
+        accent: '#16A34A',
+        icon: CheckCircle2,
+        bars: sparkBars(activeFormats),
+      },
+      {
+        label: 'Coverage Score',
+        value: `${avgCoverage}%`,
+        meta: 'Average specification fill',
+        accent: '#0284C7',
+        icon: LayoutTemplate,
+        bars: sparkBars(avgCoverage),
+      },
+      {
+        label: 'Production Readiness',
+        value: `${overview?.readiness ?? avgCoverage}%`,
+        meta: 'Stage 01 package readiness',
+        accent: '#D97706',
+        icon: Gauge,
+        bars: sparkBars(overview?.readiness ?? avgCoverage),
+      },
+      {
+        label: 'AI Confidence',
+        value: 'UNMEAS.',
+        meta: 'No fabricated confidence scores',
+        accent: '#7C3AED',
+        icon: BrainCircuit,
+        bars: sparkBars(3),
+      },
+      {
+        label: 'Pending Optimizations',
+        value: String(pendingOptimizations),
+        meta: 'Thin specs / missing channels / aspect',
+        accent: pendingOptimizations ? '#DC2626' : '#16A34A',
+        icon: AlertTriangle,
+        bars: sparkBars(pendingOptimizations + 1),
+      },
+    ],
+    [
+      policyFormats.length,
+      records.length,
+      activeFormats,
+      avgCoverage,
+      overview?.readiness,
+      pendingOptimizations,
+    ],
   );
-  const selected = formats.find((item) => item.id === selectedId) ?? formats[0] ?? null;
-  const selectedBounds = selected ? durationBounds(selected) : null;
-  const ratios = selected ? aspectList(selected) : [];
 
-  if (initialLoading && !overview) {
+  const explorerSource = useMemo(() => {
+    const live = records.filter((record) => !isFormatStub(record));
+    const policy = live.filter(isFormatPolicyProfile);
+    return policy.length > 0 ? policy : live.length > 0 ? live : records;
+  }, [records]);
+
+  const filtered = useMemo(
+    () => filterFormatRecords(explorerSource, query, filter),
+    [explorerSource, query, filter],
+  );
+
+  const selected =
+    filtered.find((item) => item.id === selectedId) ??
+    records.find((item) => item.id === selectedId) ??
+    null;
+  const config = selected?.configuration ?? {};
+  const selectedCategory = selected ? formatCategory(selected) : 'other';
+  const selectedCoverage = selected ? formatCoverage(selected) : 0;
+  const bounds = selected ? durationBounds(selected) : { min: TIMELINE_MIN_SEC, max: TIMELINE_MIN_SEC };
+  const aspects = selected ? aspectList(selected) : [];
+  const channels = splitList(configDisplay(config, 'channels'));
+  const audiences = splitList(configDisplay(config, 'audiences'));
+
+  const packageStatus =
+    overview?.status === 'ACTIVE'
+      ? 'Completed'
+      : overview?.status === 'READY'
+        ? 'Validated'
+        : systemRunning
+          ? 'Running'
+          : overview?.status === 'INVALID'
+            ? 'Failed'
+            : 'Waiting';
+
+  const motionProps = reduceMotion
+    ? {}
+    : {
+        initial: { opacity: 0, y: 10 },
+        animate: { opacity: 1, y: 0 },
+        transition: { duration: 0.35, ease: [0.22, 1, 0.36, 1] as const },
+      };
+
+  useEffect(() => {
+    if (!filtered.length) return;
+    if (selectedId && filtered.some((item) => item.id === selectedId)) return;
+    setSelectedId(filtered[0]?.id ?? null);
+  }, [filtered, selectedId]);
+
+  if (busy && !overview) {
     return (
       <main className={styles.page}>
-        <div className={styles.skeleton} />
+        <div className={styles.skeletonTop} />
+        <div className={styles.skeletonGrid}>
+          <div className={styles.skeletonPanel} />
+          <div className={styles.skeletonPanel} />
+          <div className={styles.skeletonPanel} />
+        </div>
       </main>
     );
   }
 
-  if (hardError || (!overview?.available && !records.length)) {
+  if (error || !overview?.available) {
     return (
       <main className={styles.page}>
+        <p className={styles.crumb}>Strategy & Fields / Content Format Strategy</p>
+        <h1 className={styles.title}>Content Format Strategy</h1>
         <section className={styles.unavailable}>
           <ShieldAlert size={28} aria-hidden />
           <h2>Strategy service unavailable</h2>
-          <p>{hardError || overview?.reason}</p>
+          <p>{error || overview?.reason}</p>
+          <p className={styles.lede}>Reconnecting automatically…</p>
         </section>
       </main>
     );
   }
 
   return (
-    <main className={styles.page}>
-      <header className={styles.hero}>
-        <h1>Content Format Strategy</h1>
-        <p>
-          Duration timeline + production call sheet. Select a band on the axis — not a card rack.
-          Stage 01 writes formats while Running.
-        </p>
+    <motion.main className={styles.page} {...motionProps}>
+      <header className={styles.titleRow}>
+        <div>
+          <p className={styles.crumb}>Strategy & Fields / Content Format Strategy</p>
+          <h1 className={styles.title}>Content Format Strategy</h1>
+          <p className={styles.lede}>
+            Autonomously planned content formats defining duration bands, production standards,
+            platform fit, accessibility, and publishing readiness across the CACSMS lifecycle.
+          </p>
+        </div>
+        <div className={styles.badges}>
+          <span className={`${styles.badge} ${styles.toneDraft}`}>Stage 01</span>
+          <span className={`${styles.badge} ${styles.toneAi}`}>System Owned</span>
+          <span className={`${styles.badge} ${styles.toneDraft}`}>Observe Only</span>
+          <span className={`${styles.badge} ${statusTone(packageStatus)}`}>{packageStatus}</span>
+          <span className={`${styles.badge} ${statusTone(overview.status)}`}>
+            v{overview.versionNumber ?? '—'}
+          </span>
+          <span className={`${styles.badge} ${statusTone(systemState)}`}>{systemState}</span>
+        </div>
       </header>
 
-      <div className={styles.ops} aria-label="Operations">
-        <span>
-          System <strong>{systemState.replaceAll('_', ' ')}</strong>
-        </span>
-        <span>
-          Stage 01{' '}
-          <strong>{policyReady ? 'Policy reconciled' : systemRunning ? 'Reconciling…' : 'Idle'}</strong>
-        </span>
-        <span>
-          Formats <strong>{formats.length}</strong>
-        </span>
-        <span>
-          Refresh <strong>{relativeRefresh(lastLoadedAt, now)}</strong>
-        </span>
+      <div className={styles.infoNotice} role="status">
+        <Sparkles size={16} aria-hidden />
+        <div>
+          <strong>Observation only</strong>
+          Content format strategies are generated automatically during Stage 01. This workspace
+          provides format exploration, production standards, platform fit, and audit visibility only.
+          {syncedAt ? ` Last synchronized ${new Date(syncedAt).toLocaleString()}.` : ''}
+        </div>
       </div>
 
-      {softError ? (
-        <p className={styles.errorBanner} role="status">
-          {softError}
-        </p>
+      <section className={styles.kpiGrid} aria-label="Format KPI summary">
+        {kpis.map((kpi) => {
+          const Icon = kpi.icon;
+          return (
+            <article
+              key={kpi.label}
+              className={styles.kpiCard}
+              style={{ ['--accent' as string]: kpi.accent }}
+              title={kpi.meta}
+            >
+              <div className={styles.kpiTop}>
+                <span className={styles.kpiLabel}>{kpi.label}</span>
+                <Icon size={16} className={styles.kpiIcon} aria-hidden />
+              </div>
+              <div className={styles.kpiValue}>{kpi.value}</div>
+              <div className={styles.kpiMeta}>
+                <span>{kpi.meta}</span>
+                <span className={styles.spark} aria-hidden>
+                  {kpi.bars.map((height, index) => (
+                    <i key={`${kpi.label}-${index}`} style={{ height: `${height}px` }} />
+                  ))}
+                </span>
+              </div>
+            </article>
+          );
+        })}
+      </section>
+
+      <section className={styles.lifecycle} aria-label="Format lifecycle">
+        <div className={styles.lifecycleHead}>
+          <h2>Format lifecycle</h2>
+          <span>
+            {systemRunning
+              ? 'Stage 01 running — format discovery active'
+              : `System ${systemState} · package ${overview.status}`}
+          </span>
+        </div>
+        <div className={styles.lifecycleTrack}>
+          {LIFECYCLE.map((stage, index) => {
+            const Icon = stage.icon;
+            const state = lifecycleState(
+              index,
+              systemRunning,
+              run?.status,
+              overview.status,
+              policyFormats.length || records.length,
+            );
+            return (
+              <div key={stage.key} className={styles.stage} data-state={state}>
+                <span className={styles.stageIcon}>
+                  <Icon size={14} aria-hidden />
+                </span>
+                <strong>{stage.label}</strong>
+                <span>
+                  {state === 'done' ? 'Completed' : state === 'active' ? 'Running' : 'Waiting'}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      </section>
+
+      {!records.length ? (
+        <section className={styles.waiting} aria-label="Awaiting autonomous format generation">
+          <div className={styles.waitingIcon}>
+            <Film size={24} aria-hidden />
+          </div>
+          <h3>Awaiting Autonomous Format Generation</h3>
+          <p>
+            Stage 01 has not yet generated content format strategies. Formats appear automatically
+            after global Start begins and format discovery completes.
+          </p>
+          <div className={styles.waitingChecklist}>
+            <div>
+              <strong>System</strong>
+              {systemState}
+            </div>
+            <div>
+              <strong>Package</strong>
+              {overview.status}
+            </div>
+            <div>
+              <strong>Autonomy run</strong>
+              {run?.status ?? 'IDLE'}
+            </div>
+            <div>
+              <strong>Expected sequence</strong>
+              Discover → Classify → Persist
+            </div>
+          </div>
+          <div className={styles.ghostCards} aria-hidden>
+            <div className={styles.ghostCard} />
+            <div className={styles.ghostCard} />
+            <div className={styles.ghostCard} />
+          </div>
+        </section>
       ) : null}
 
-      <div className={styles.body}>
-        {!formats.length ? (
-          <section className={styles.empty}>
-            <h2>{stubOnly || !records.length ? 'Timeline not yet written' : 'No formats'}</h2>
+      {records.length && systemRunning && !policyFormats.length ? (
+        <section className={styles.infoNotice} role="status" aria-live="polite">
+          <Timer size={16} aria-hidden />
+          <div>
+            <strong>Live generation in progress</strong>
+            Stage 01 is reconciling format strategies. Explorer and intelligence panels update
+            automatically as records persist.
+          </div>
+        </section>
+      ) : null}
+
+      <div className={styles.workspace}>
+        <aside className={styles.panel} aria-label="Format Explorer">
+          <div className={styles.panelHead}>
+            <h2>Format Explorer</h2>
             <p>
-              {systemRunning
-                ? 'Stage 01 is reconciling format briefs onto the timeline.'
-                : 'Press Start in the top bar. Stage 01 plots formats on the duration axis automatically.'}
+              {explorerSource.length} formats
+              {filtered.length !== explorerSource.length ? ` · ${filtered.length} shown` : ''} ·
+              auto-updating
             </p>
-          </section>
-        ) : (
-          <>
-            <section className={styles.timelineCard} aria-label="Format duration timeline">
-              <div className={styles.axisLabels}>
-                <span>{formatDurationLabel(TIMELINE_MIN_SEC)}</span>
-                <span>Duration axis</span>
-                <span>{formatDurationLabel(TIMELINE_MAX_SEC)}</span>
-              </div>
-              <div className={styles.track}>
-                {formats.map((record) => {
-                  const bounds = durationBounds(record);
-                  const left = timelinePercent(bounds.min);
-                  const right = timelinePercent(bounds.max);
-                  const width = Math.max(4, right - left);
-                  const active = record.id === selected?.id;
-                  return (
+            <input
+              className={styles.search}
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Search formats, channels, durations…"
+              aria-label="Search content formats"
+            />
+            <div className={styles.chips} role="group" aria-label="Format filters">
+              {(
+                [
+                  ['all', 'All'],
+                  ['short_form', 'Short-form'],
+                  ['explainer', 'Explainer'],
+                  ['lesson', 'Lesson'],
+                  ['documentary', 'Documentary'],
+                  ['validated', 'Validated'],
+                  ['thin_spec', 'Thin spec'],
+                  ['duplicate', 'Duplicate'],
+                  ['stub_only', 'Stub'],
+                ] as const
+              ).map(([id, label]) => (
+                <button
+                  key={id}
+                  type="button"
+                  className={`${styles.chip} ${filter === id ? styles.chipActive : ''}`}
+                  onClick={() => setFilter(id)}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+          {filtered.length ? (
+            <ul className={styles.explorerList}>
+              {filtered.map((record) => {
+                const active = record.id === selectedId;
+                const category = formatCategory(record);
+                const coverage = formatCoverage(record);
+                const d = durationBounds(record);
+                return (
+                  <li key={record.id}>
                     <button
-                      key={record.id ?? record.name}
                       type="button"
-                      className={`${styles.band} ${active ? styles.bandActive : ''}`}
-                      style={{ left: `calc(${left}% + 12px)`, width: `calc(${width}% - 4px)` }}
-                      aria-pressed={active}
-                      title={`${record.name}: ${formatDurationLabel(bounds.min)}–${formatDurationLabel(bounds.max)}`}
+                      className={`${styles.objCard} ${active ? styles.objCardActive : ''}`}
                       onClick={() => setSelectedId(record.id ?? null)}
                     >
-                      <span className={styles.bandLabel}>{record.name}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            </section>
-
-            {selected && selectedBounds ? (
-              <article className={styles.callSheet} aria-label="Production call sheet">
-                <header className={styles.callHead}>
-                  <div>
-                    <h2>{selected.name}</h2>
-                    <p>{selected.description}</p>
-                  </div>
-                  <div className={styles.durationBadge}>
-                    {formatDurationLabel(selectedBounds.min)} –{' '}
-                    {formatDurationLabel(selectedBounds.max)}
-                  </div>
-                </header>
-
-                <div className={styles.frames} aria-label="Aspect ratio frames">
-                  {(ratios.length ? ratios : ['16:9']).map((ratio) => {
-                    const size = aspectBoxStyle(ratio);
-                    return (
-                      <div key={ratio} className={styles.frame}>
-                        <div
-                          className={styles.frameBox}
-                          style={{ width: size.width, height: size.height }}
-                        />
-                        {ratio}
+                      <div className={styles.objCardTop}>
+                        <strong>{record.name}</strong>
+                        <em className={`${styles.badge} ${statusTone(record.status)}`}>
+                          {record.status}
+                        </em>
                       </div>
-                    );
-                  })}
-                </div>
+                      <div className={styles.objMeta}>
+                        <span className={`${styles.pill} ${statusTone(category)}`}>
+                          {categoryLabel(category)}
+                        </span>
+                        <span className={styles.pill}>
+                          {formatDurationLabel(d.min)}–{formatDurationLabel(d.max)}
+                        </span>
+                        <span className={styles.pill}>{coverage}% fill</span>
+                        <span className={styles.pill}>UNMEASURED conf.</span>
+                      </div>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          ) : (
+            <div className={styles.empty}>
+              <h3>{systemRunning ? 'Discovery in progress' : 'No matching formats'}</h3>
+              <p>
+                {systemRunning
+                  ? 'Format discovery is reconciling strategies. This explorer updates automatically.'
+                  : 'Adjust filters or wait for Stage 01 to materialise format strategies.'}
+              </p>
+            </div>
+          )}
+        </aside>
 
-                <dl className={styles.sheetGrid}>
-                  {CALL_SHEET_FIELDS.map((row) => (
-                    <div key={row.key} className={styles.sheetRow}>
-                      <dt>{row.label}</dt>
-                      <dd>{configDisplay(selected.configuration, row.key) || 'Not set'}</dd>
+        <section className={`${styles.panel} ${styles.center}`} aria-label="Content Format Intelligence">
+          <div className={styles.panelHead}>
+            <h2>{selected?.name || 'Content Format Intelligence'}</h2>
+            <p>Explainable production brief and platform fit for the selected system-owned format.</p>
+          </div>
+          <div className={styles.tabs} role="tablist" aria-label="Format tabs">
+            {TABS.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                role="tab"
+                aria-selected={tab === item.id}
+                className={`${styles.tab} ${tab === item.id ? styles.tabActive : ''}`}
+                onClick={() => setTab(item.id)}
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
+
+          <div className={styles.tabBody} role="tabpanel">
+            {!selected ? (
+              <div className={styles.empty}>
+                <h3>No format selected</h3>
+                <p>Persisted formats are selected automatically when Stage 01 completes.</p>
+              </div>
+            ) : null}
+
+            {selected && tab === 'overview' ? (
+              <>
+                <article className={styles.sectionCard}>
+                  <h3>Format identity</h3>
+                  <div className={styles.identityGrid}>
+                    <div className={styles.field}>
+                      <span>Format name</span>
+                      <strong>{display(selected.name)}</strong>
+                    </div>
+                    <div className={styles.field}>
+                      <span>System key</span>
+                      <strong>{display(configDisplay(config, 'systemKey'))}</strong>
+                    </div>
+                    <div className={styles.field}>
+                      <span>Family / category</span>
+                      <strong>{categoryLabel(selectedCategory)}</strong>
+                    </div>
+                    <div className={styles.field}>
+                      <span>Duration band</span>
+                      <strong>
+                        {formatDurationLabel(bounds.min)}–{formatDurationLabel(bounds.max)}
+                      </strong>
+                    </div>
+                    <div className={styles.field}>
+                      <span>Status</span>
+                      <strong>{display(selected.status)}</strong>
+                    </div>
+                    <div className={styles.field}>
+                      <span>Priority</span>
+                      <strong>{selected.priority}</strong>
+                    </div>
+                    <div className={styles.field}>
+                      <span>Cost boundary</span>
+                      <strong>{display(configDisplay(config, 'costBoundary'))}</strong>
+                    </div>
+                    <div className={styles.field}>
+                      <span>Owning agent</span>
+                      <strong>Format Strategy Agent</strong>
+                    </div>
+                  </div>
+                </article>
+                <article className={styles.sectionCard}>
+                  <h3>Executive summary</h3>
+                  <p>{display(selected.description)}</p>
+                  <div className={styles.timelineStrip} aria-label="Duration timeline band">
+                    <div className={styles.timelineAxis}>
+                      <i
+                        className={styles.timelineBand}
+                        style={{
+                          left: `${timelinePercent(bounds.min)}%`,
+                          width: `${Math.max(2, timelinePercent(bounds.max) - timelinePercent(bounds.min))}%`,
+                        }}
+                      />
+                    </div>
+                    <div className={styles.timelineLabels}>
+                      <span>{formatDurationLabel(TIMELINE_MIN_SEC)}</span>
+                      <span>
+                        Selected {formatDurationLabel(bounds.min)}–{formatDurationLabel(bounds.max)}
+                      </span>
+                      <span>{formatDurationLabel(TIMELINE_MAX_SEC)}</span>
+                    </div>
+                  </div>
+                </article>
+                <article className={styles.sectionCard}>
+                  <h3>Format health</h3>
+                  <div className={styles.scoreRow}>
+                    {[
+                      ['Spec fill', selectedCoverage],
+                      ['Priority', selected.priority],
+                      ['Package readiness', overview.readiness ?? 0],
+                      ['Channel entries', Math.min(100, channels.length * 25)],
+                    ].map(([label, value]) => (
+                      <div key={String(label)} className={styles.metricTile}>
+                        <span className={styles.kpiLabel}>{label}</span>
+                        <div
+                          className={styles.ring}
+                          style={{ ['--p' as string]: Number(value) }}
+                          aria-hidden
+                        />
+                        <strong>{Number(value)}%</strong>
+                      </div>
+                    ))}
+                  </div>
+                  <p style={{ marginTop: 12, color: 'var(--muted)' }}>
+                    AI confidence and engagement potential remain UNMEASURED until Research & Evidence
+                    publishes verified scores.
+                  </p>
+                </article>
+              </>
+            ) : null}
+
+            {selected && tab === 'specs' ? (
+              <article className={styles.sectionCard}>
+                <h3>Format specifications</h3>
+                <div className={styles.groupList}>
+                  {[...SPEC_FIELDS].map((key) => (
+                    <div key={key} className={styles.groupItem}>
+                      <span>{fieldLabel(key)}</span>
+                      <b>{display(configDisplay(config, key))}</b>
                     </div>
                   ))}
-                </dl>
+                </div>
+                {aspects.length ? (
+                  <div className={styles.countryChips} style={{ marginTop: 12 }}>
+                    {aspects.map((item) => (
+                      <span key={item} className={styles.countryChip}>
+                        {item}
+                      </span>
+                    ))}
+                  </div>
+                ) : null}
               </article>
             ) : null}
-          </>
-        )}
+
+            {selected && tab === 'production' ? (
+              <article className={styles.sectionCard}>
+                <h3>Production workflow / call sheet</h3>
+                <div className={styles.groupList}>
+                  {CALL_SHEET_FIELDS.map((item) => (
+                    <div key={item.key} className={styles.groupItem}>
+                      <span>{item.label}</span>
+                      <b>{display(configDisplay(config, item.key))}</b>
+                    </div>
+                  ))}
+                  {[...PRODUCTION_FIELDS].filter((key) => !CALL_SHEET_FIELDS.some((c) => c.key === key)).map(
+                    (key) => (
+                      <div key={key} className={styles.groupItem}>
+                        <span>{fieldLabel(key)}</span>
+                        <b>{display(configDisplay(config, key))}</b>
+                      </div>
+                    ),
+                  )}
+                </div>
+              </article>
+            ) : null}
+
+            {selected && tab === 'platforms' ? (
+              <article className={styles.sectionCard}>
+                <h3>Platform compatibility</h3>
+                <div className={styles.groupList}>
+                  {[...PLATFORM_FIELDS].map((key) => (
+                    <div key={key} className={styles.groupItem}>
+                      <span>{fieldLabel(key)}</span>
+                      <b>{display(configDisplay(config, key))}</b>
+                    </div>
+                  ))}
+                </div>
+                <div className={styles.countryChips} style={{ marginTop: 12 }}>
+                  {channels.map((item) => (
+                    <span key={item} className={styles.countryChip}>
+                      {item}
+                    </span>
+                  ))}
+                  {audiences.map((item) => (
+                    <span key={item} className={styles.countryChip}>
+                      {item}
+                    </span>
+                  ))}
+                </div>
+              </article>
+            ) : null}
+
+            {selected && tab === 'reasoning' ? (
+              <>
+                <article className={styles.sectionCard}>
+                  <h3>Why this format exists</h3>
+                  <p>
+                    Generated by the Format Strategy Agent to define {categoryLabel(selectedCategory).toLowerCase()}{' '}
+                    production standards for Stage 01 publishing readiness
+                    {configDisplay(config, 'purpose') ? `: ${configDisplay(config, 'purpose')}` : '.'}
+                    {selected.description ? ` ${selected.description}` : ''}
+                  </p>
+                </article>
+                <article className={styles.sectionCard}>
+                  <h3>Decision factors</h3>
+                  <div className={styles.identityGrid}>
+                    <div className={styles.field}>
+                      <span>Origin</span>
+                      <strong>{display(configDisplay(config, 'origin'))}</strong>
+                    </div>
+                    <div className={styles.field}>
+                      <span>Family</span>
+                      <strong>{display(configDisplay(config, 'family'))}</strong>
+                    </div>
+                    <div className={styles.field}>
+                      <span>Confidence</span>
+                      <strong>UNMEASURED</strong>
+                    </div>
+                    <div className={styles.field}>
+                      <span>Frequency posture</span>
+                      <strong>{display(configDisplay(config, 'frequency'))}</strong>
+                    </div>
+                  </div>
+                </article>
+                <article className={styles.sectionCard}>
+                  <h3>Governance</h3>
+                  <div className={styles.groupList}>
+                    <div className={styles.groupItem}>
+                      <span>Accessibility</span>
+                      <b>{display(configDisplay(config, 'accessibility'))}</b>
+                    </div>
+                    <div className={styles.groupItem}>
+                      <span>Captions</span>
+                      <b>{display(configDisplay(config, 'captions'))}</b>
+                    </div>
+                    <div className={styles.groupItem}>
+                      <span>Evidence depth</span>
+                      <b>{display(configDisplay(config, 'evidenceDepth'))}</b>
+                    </div>
+                  </div>
+                </article>
+              </>
+            ) : null}
+
+            {selected && tab === 'dependencies' ? (
+              <article className={styles.sectionCard}>
+                <h3>Downstream and peer links</h3>
+                <div className={styles.depChain}>
+                  {['objectives', 'domains', 'audiences', 'channels', 'editorial-policy', 'localisation'].map(
+                    (item, index) => (
+                      <span key={item} style={{ display: 'contents' }}>
+                        {index > 0 ? <span className={styles.depArrow}>→</span> : null}
+                        <span className={styles.depNode}>{item}</span>
+                      </span>
+                    ),
+                  )}
+                </div>
+                <div className={styles.groupList} style={{ marginTop: 14 }}>
+                  <div className={styles.groupItem}>
+                    <span>Detected issues</span>
+                    <b>{issues.issueCount}</b>
+                  </div>
+                  <div className={styles.groupItem}>
+                    <span>Thin specifications</span>
+                    <b>{issues.thinSpecs.length}</b>
+                  </div>
+                  <div className={styles.groupItem}>
+                    <span>Missing channels</span>
+                    <b>{issues.missingChannels.length}</b>
+                  </div>
+                  <div className={styles.groupItem}>
+                    <span>Missing aspect ratios</span>
+                    <b>{issues.missingAspect.length}</b>
+                  </div>
+                </div>
+              </article>
+            ) : null}
+
+            {selected && tab === 'history' ? (
+              <article className={styles.sectionCard}>
+                <h3>Version timeline</h3>
+                <ul className={styles.timeline}>
+                  <li>
+                    <span className={styles.dot} aria-hidden />
+                    <div>
+                      <strong>Format materialisation</strong>
+                      <p>
+                        {selected.effectiveFrom
+                          ? new Date(selected.effectiveFrom).toLocaleString()
+                          : 'Timestamp not persisted'}
+                      </p>
+                    </div>
+                  </li>
+                  <li>
+                    <span className={styles.dot} aria-hidden />
+                    <div>
+                      <strong>Current package</strong>
+                      <p>
+                        v{overview.versionNumber ?? '—'} · {overview.status} · readiness{' '}
+                        {overview.readiness ?? 0}%
+                      </p>
+                    </div>
+                  </li>
+                  <li>
+                    <span className={styles.dot} aria-hidden />
+                    <div>
+                      <strong>Autonomy run</strong>
+                      <p>{run?.status ?? 'IDLE'}</p>
+                    </div>
+                  </li>
+                </ul>
+              </article>
+            ) : null}
+
+            {tab === 'audit' ? (
+              <article className={styles.sectionCard}>
+                <h3>Audit trail</h3>
+                {audit.length ? (
+                  <table className={styles.auditTable}>
+                    <thead>
+                      <tr>
+                        <th>Time</th>
+                        <th>Actor</th>
+                        <th>Action</th>
+                        <th>Reason</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {audit.slice(0, 12).map((row) => (
+                        <tr key={row.id}>
+                          <td>{new Date(row.createdAt).toLocaleString()}</td>
+                          <td>{row.actorType}</td>
+                          <td>{row.action}</td>
+                          <td>{row.reason ?? '—'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                ) : (
+                  <p>No audit events persisted for this version yet.</p>
+                )}
+              </article>
+            ) : null}
+          </div>
+        </section>
+
+        <aside className={`${styles.panel} ${styles.insights}`} aria-label="AI Insights">
+          <div className={styles.scoreHero}>
+            <span className={styles.kpiLabel}>AI Insights</span>
+            <strong>{selected ? `${selectedCoverage}%` : '—'}</strong>
+            <span className={`${styles.badge} ${styles.toneAi}`}>
+              <BrainCircuit size={12} aria-hidden /> Format agent
+            </span>
+          </div>
+          <div>
+            <div className={styles.insightRow}>
+              <span>Format score</span>
+              <b>{selected ? `${selectedCoverage}% fill` : '—'}</b>
+            </div>
+            <div className={styles.insightRow}>
+              <span>Production complexity</span>
+              <b>{display(configDisplay(config, 'costBoundary'))}</b>
+            </div>
+            <div className={styles.insightRow}>
+              <span>Engagement potential</span>
+              <b>UNMEASURED</b>
+            </div>
+            <div className={styles.insightRow}>
+              <span>Linked audiences</span>
+              <b>{audiences.length || 'Stage 01 peer'}</b>
+            </div>
+            <div className={styles.insightRow}>
+              <span>Channels</span>
+              <b>{channels.length}</b>
+            </div>
+            <div className={styles.insightRow}>
+              <span>AI confidence</span>
+              <b>UNMEASURED</b>
+            </div>
+            <div className={styles.insightRow}>
+              <span>Detected issues</span>
+              <b>{issues.issueCount}</b>
+            </div>
+            <div className={styles.insightRow}>
+              <span>Subtitle</span>
+              <b>{selected ? formatSubtitle(selected) : '—'}</b>
+            </div>
+          </div>
+          <div className={styles.xai}>
+            <h3>Recommendations</h3>
+            <ul>
+              <li>
+                {issues.thinSpecs.length
+                  ? `Enrich ${issues.thinSpecs.length} thin format specification(s).`
+                  : 'Format specification fill is above the thin-spec threshold.'}
+              </li>
+              <li>
+                {issues.missingChannels.length
+                  ? `Attach channel targets to ${issues.missingChannels.length} format(s).`
+                  : 'Channel targets are declared on policy formats.'}
+              </li>
+              <li>
+                Align aspect ratios and accessibility rules with channel and editorial peers before
+                handoff.
+              </li>
+            </ul>
+          </div>
+          <div className={styles.radar} aria-label="Format health axes">
+            {[
+              ['Coverage', selectedCoverage],
+              ['Priority', selected?.priority ?? 0],
+              ['Channels', channels.length ? Math.min(100, channels.length * 25) : 0],
+              ['Aspects', aspects.length ? Math.min(100, aspects.length * 30) : 0],
+              ['Readiness', overview.readiness ?? 0],
+              ['Issues free', Math.max(0, 100 - issues.issueCount * 8)],
+            ].map(([label, value]) => (
+              <div key={label} className={styles.radarItem}>
+                <span>{label}</span>
+                <div className={styles.radarBar}>
+                  <i style={{ width: `${Math.max(0, Math.min(100, Number(value)))}%` }} />
+                </div>
+              </div>
+            ))}
+          </div>
+        </aside>
       </div>
-    </main>
+
+      <section className={styles.bottom} aria-label="Timeline activity and audit">
+        <article className={styles.panel}>
+          <div className={styles.panelHead}>
+            <h2>Execution timeline</h2>
+            <p>Persisted Stage 01 milestones</p>
+          </div>
+          <div className={styles.tabBody}>
+            <ul className={styles.timeline}>
+              <li>
+                <span className={styles.dot} aria-hidden />
+                <div>
+                  <strong>Strategy version</strong>
+                  <p>
+                    v{overview.versionNumber ?? '—'} · {overview.status}
+                  </p>
+                </div>
+              </li>
+              <li>
+                <span className={styles.dot} aria-hidden />
+                <div>
+                  <strong>Format persistence</strong>
+                  <p>
+                    {policyFormats.length || records.length} formats · {activeFormats} active ·{' '}
+                    {pendingOptimizations} pending
+                  </p>
+                </div>
+              </li>
+              <li>
+                <span className={styles.dot} aria-hidden />
+                <div>
+                  <strong>System control</strong>
+                  <p>{systemState}</p>
+                </div>
+              </li>
+            </ul>
+          </div>
+        </article>
+        <article className={styles.panel}>
+          <div className={styles.panelHead}>
+            <h2>Live activity</h2>
+            <p>Current autonomy posture</p>
+          </div>
+          <div className={styles.tabBody}>
+            <div className={styles.insightRow}>
+              <span>Run status</span>
+              <b>{run?.status ?? 'IDLE'}</b>
+            </div>
+            <div className={styles.insightRow}>
+              <span>Formats discovered</span>
+              <b>{records.length}</b>
+            </div>
+            <div className={styles.insightRow}>
+              <span>
+                <Activity size={12} aria-hidden /> Agent
+              </span>
+              <b>Format Strategy</b>
+            </div>
+            <div className={styles.insightRow}>
+              <span>
+                <MonitorPlay size={12} aria-hidden /> Policy formats
+              </span>
+              <b>{policyFormats.length}</b>
+            </div>
+          </div>
+        </article>
+        <article className={styles.panel}>
+          <div className={styles.panelHead}>
+            <h2>Recent audit</h2>
+            <p>Latest strategy events</p>
+          </div>
+          <div className={styles.tabBody}>
+            {audit.slice(0, 5).map((row) => (
+              <div key={row.id} className={styles.insightRow}>
+                <span>{row.action}</span>
+                <b>{row.actorType}</b>
+              </div>
+            ))}
+            {!audit.length ? <p className={styles.empty}>No events yet.</p> : null}
+          </div>
+        </article>
+      </section>
+    </motion.main>
   );
 }

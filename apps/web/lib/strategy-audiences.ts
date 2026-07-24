@@ -4,7 +4,13 @@ import { configDisplay, fieldLabel } from '@/apps/web/lib/strategy-taxonomy';
 
 export type AudienceSegment = 'primary' | 'secondary' | 'excluded' | 'unclassified';
 
-export type AudienceFilter = 'all' | AudienceSegment;
+export type AudienceFilter =
+  | 'all'
+  | AudienceSegment
+  | 'validated'
+  | 'stub_only'
+  | 'thin_profile'
+  | 'duplicate';
 
 export type AudienceFieldGroup = {
   id: 'who' | 'needs' | 'reach' | 'success';
@@ -124,9 +130,14 @@ export function filterAudienceRecords(
   filter: AudienceFilter,
 ): StrategyRecord[] {
   const needle = query.trim().toLowerCase();
+  const issues = audienceIssues(records);
   return records.filter((record) => {
     if (!matchesAudienceQuery(record, needle)) return false;
     if (filter === 'all') return true;
+    if (filter === 'validated') return record.status === 'ACTIVE' || record.status === 'READY';
+    if (filter === 'stub_only') return isAudienceStub(record);
+    if (filter === 'thin_profile') return issues.thinProfiles.some((item) => item.id === record.id);
+    if (filter === 'duplicate') return issues.duplicates.some((item) => item.id === record.id);
     return audienceSegment(record) === filter;
   });
 }
@@ -155,4 +166,73 @@ export function filledFieldCount(record: StrategyRecord, fields: readonly string
     (count, key) => count + (configDisplay(config, key).trim() ? 1 : 0),
     0,
   );
+}
+
+export function splitList(value?: string) {
+  return (value ?? '')
+    .split(/[,;|]/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+export function profileCoverage(record: StrategyRecord): number {
+  const all = [...WHO_FIELDS, ...NEEDS_FIELDS, ...REACH_FIELDS, ...SUCCESS_FIELDS];
+  const filled = filledFieldCount(record, all);
+  return Math.round((filled / Math.max(1, all.length)) * 100);
+}
+
+export function audienceIssues(records: StrategyRecord[]) {
+  const stubs = records.filter(isAudienceStub);
+  const thinProfiles = records.filter((record) => {
+    if (isAudienceStub(record)) return false;
+    return profileCoverage(record) < 40;
+  });
+  const unclassified = records.filter((record) => audienceSegment(record) === 'unclassified');
+  const nameBuckets = new Map<string, StrategyRecord[]>();
+  for (const record of records) {
+    const key = `${record.name.trim().toLowerCase()}::${audienceSegment(record)}`;
+    const bucket = nameBuckets.get(key) ?? [];
+    bucket.push(record);
+    nameBuckets.set(key, bucket);
+  }
+  const duplicates = [...nameBuckets.values()].filter((list) => list.length > 1).flat();
+  const overlapping = records.filter((record) => {
+    const segment = audienceSegment(record);
+    if (segment === 'excluded' || segment === 'unclassified') return false;
+    const interest = configDisplay(record.configuration, 'interestGroup').trim().toLowerCase();
+    if (!interest) return false;
+    return records.some(
+      (other) =>
+        other.id !== record.id &&
+        audienceSegment(other) !== segment &&
+        audienceSegment(other) !== 'excluded' &&
+        configDisplay(other.configuration, 'interestGroup').trim().toLowerCase() === interest,
+    );
+  });
+
+  return {
+    stubs,
+    thinProfiles,
+    unclassified,
+    duplicates,
+    overlapping,
+    issueCount:
+      stubs.length +
+      thinProfiles.length +
+      unclassified.length +
+      duplicates.length +
+      overlapping.length,
+  };
+}
+
+export function audienceSubtitle(record: StrategyRecord): string {
+  const config = record.configuration ?? {};
+  const parts = [
+    segmentLabel(audienceSegment(record)),
+    configDisplay(config, 'interestGroup'),
+    configDisplay(config, 'countryRegion'),
+  ].filter(Boolean);
+  if (parts.length) return parts.join(' · ');
+  if (isAudienceStub(record)) return 'Baseline audience stub';
+  return 'Audience persona';
 }

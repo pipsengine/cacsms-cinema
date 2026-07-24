@@ -1,14 +1,14 @@
 import { NextResponse } from 'next/server';
-import { candidateInput, IntelligenceRepository } from '@/lib/content-intelligence';
+import { candidateInput } from '@/lib/content-intelligence';
+import { loadCandidateIdeas } from '@/lib/content-intelligence/candidates';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET() {
   try {
-    const repo = new IntelligenceRepository();
-    return NextResponse.json(await repo.list());
+    return NextResponse.json(await loadCandidateIdeas());
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Failed to list candidates';
+    const message = error instanceof Error ? error.message : 'Failed to load candidate ideas';
     return NextResponse.json({ message }, { status: 400 });
   }
 }

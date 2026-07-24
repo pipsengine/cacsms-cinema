@@ -71,6 +71,8 @@ export type ReadinessItem = {
   blockers: number;
   warnings: number;
   missing: string[];
+  recordCount?: number;
+  lastValidatedAt?: string | null;
 };
 
 export type StrategyOverview = {

@@ -10,6 +10,9 @@ import { FORMATS_POLICY } from './formats-policy';
 import { CHANNELS_POLICY } from './channels-policy';
 import { LOCALISATION_POLICY } from './localisation-policy';
 import { SOURCE_POLICY } from './source-policy';
+import { RISK_POLICY } from './risk-policy';
+import { SELECTION_THRESHOLDS } from './selection-thresholds';
+import { PORTFOLIO_POLICY } from './portfolio';
 import { StrategyRepository } from './repository';
 
 export class StrategyService {
@@ -48,12 +51,41 @@ export class StrategyService {
       `;
       const present = new Set(counts.map((row) => row.section_key));
 
+      const activeConfigs = await tx.$queryRaw<
+        Array<{ section_key: string; configuration_json: string }>
+      >`
+        SELECT section_key, configuration_json
+        FROM strategy_records
+        WHERE version_id = CONVERT(uniqueidentifier, ${versionId})
+          AND archived_at IS NULL
+          AND status = 'ACTIVE'
+      `;
+      const policyOnly = new Set<string>();
+      const bySection = new Map<string, string[]>();
+      for (const row of activeConfigs) {
+        const list = bySection.get(row.section_key) ?? [];
+        list.push(row.configuration_json || '{}');
+        bySection.set(row.section_key, list);
+      }
+      for (const [section, configs] of bySection) {
+        const allStubs = configs.every((raw) => {
+          try {
+            const config = JSON.parse(raw) as { systemKey?: string };
+            const key = String(config.systemKey ?? '');
+            return !key || key.startsWith('policy.');
+          } catch {
+            return true;
+          }
+        });
+        if (allStubs) policyOnly.add(section);
+      }
+
       for (const key of REQUIRED_SECTIONS) {
         const passed = present.has(key) ? 1 : 0;
         const code = `REQUIRED_${key.toUpperCase().replaceAll('-', '_')}`;
         const explanation = passed
-          ? 'Requirement satisfied'
-          : 'At least one active record is required';
+          ? `Expected ≥1 ACTIVE record; actual ${bySection.get(key)?.length ?? 0}`
+          : 'Expected ≥1 ACTIVE record; actual 0';
         await tx.$executeRaw`
           INSERT INTO strategy_validation_results(
             run_id, rule_code, rule_version, severity, passed, blocking, section_key, explanation, recommendation
@@ -66,17 +98,72 @@ export class StrategyService {
             1,
             ${key},
             ${explanation},
-            ${'Configure this section'}
+            ${passed ? 'Section presence satisfied' : 'Start Stage 01 autonomy so this section materialises'}
           )
         `;
+
+        if (passed && policyOnly.has(key)) {
+          await tx.$executeRaw`
+            INSERT INTO strategy_validation_results(
+              run_id, rule_code, rule_version, severity, passed, blocking, section_key, explanation, recommendation
+            ) VALUES (
+              CONVERT(uniqueidentifier, ${runId}),
+              ${`STUB_ONLY_${key.toUpperCase().replaceAll('-', '_')}`},
+              1,
+              ${'WARNING'},
+              0,
+              0,
+              ${key},
+              ${'Section has ACTIVE records but only baseline policy stubs — reconcile system policy rules'},
+              ${'Allow Stage 01 reconcile to replace stubs with system policy records'}
+            )
+          `;
+        }
       }
 
-      const ready = REQUIRED_SECTIONS.every((key) => present.has(key));
-      const nextStatus = ready ? 'READY' : 'INVALID';
+      const presenceReady = REQUIRED_SECTIONS.every((key) => present.has(key));
+      const nextStatus = presenceReady ? 'READY' : 'INVALID';
+      const stubCount = [...policyOnly].filter((key) => present.has(key)).length;
+
+      const handoffPassed = presenceReady ? 1 : 0;
+      await tx.$executeRaw`
+        INSERT INTO strategy_validation_results(
+          run_id, rule_code, rule_version, severity, passed, blocking, section_key, explanation, recommendation
+        ) VALUES (
+          CONVERT(uniqueidentifier, ${runId}),
+          ${'HANDOFF_CONTENT_INTELLIGENCE'},
+          1,
+          ${presenceReady ? (stubCount > 0 ? 'WARNING' : 'INFO') : 'CRITICAL'},
+          ${handoffPassed},
+          ${presenceReady ? 0 : 1},
+          ${null},
+          ${
+            presenceReady
+              ? stubCount > 0
+                ? `Mandatory sections present; ${stubCount} section(s) still on baseline stubs`
+                : 'All Stage 01 mandatory sections have ACTIVE records; package eligible for Content Intelligence handoff'
+              : 'Handoff blocked until every mandatory section has at least one ACTIVE record'
+          },
+          ${
+            presenceReady
+              ? stubCount > 0
+                ? 'Activate is allowed; continue reconcile to replace remaining stubs'
+                : 'Proceed to activate when package status is READY'
+              : 'Resolve failed mandatory checks first'
+          }
+        )
+      `;
 
       await tx.$executeRaw`
         UPDATE strategy_validation_runs
-        SET status = 'COMPLETED', completed_at = sysutcdatetime()
+        SET status = 'COMPLETED',
+            completed_at = sysutcdatetime(),
+            summary_json = ${JSON.stringify({
+              presenceReady,
+              stubOnlySections: [...policyOnly],
+              stubCount,
+              sectionCount: REQUIRED_SECTIONS.length,
+            })}
         WHERE id = CONVERT(uniqueidentifier, ${runId})
       `;
       await tx.$executeRaw`
@@ -860,6 +947,213 @@ export class StrategyService {
     `;
 
     return { created, updated, total: SOURCE_POLICY.length };
+  }
+
+  async reconcileRiskPolicy(versionId?: string) {
+    await this.repo.ensureDraft();
+    const overview = await this.repo.overview();
+    const targetVersionId = versionId ?? overview.versionId;
+    if (!targetVersionId) throw new Error('No strategy version available');
+    if (!isMutableStrategyStatus(overview.status) && !versionId) {
+      throw new Error('Activated strategy history is immutable');
+    }
+
+    const existing = await this.repo.list(targetVersionId, 'risk-policy');
+    for (const record of existing) {
+      const key = String(record.configuration?.systemKey ?? '');
+      if (key === 'policy.risk-policy' && record.id) {
+        await this.repo.update(targetVersionId, 'risk-policy', record.id, {
+          name: record.name,
+          description: record.description ?? '',
+          status: 'ARCHIVED',
+          priority: record.priority,
+          configuration: {
+            ...record.configuration,
+            archivedReason: 'Superseded by risk & sensitivity policy rules',
+          },
+          effectiveFrom: record.effectiveFrom ?? null,
+          effectiveTo: record.effectiveTo ?? null,
+        });
+      }
+    }
+
+    const live = (await this.repo.list(targetVersionId, 'risk-policy')).filter(
+      (record) => record.status !== 'ARCHIVED',
+    );
+    const byKey = new Map(
+      live
+        .map((record) => [String(record.configuration?.systemKey ?? ''), record] as const)
+        .filter(([key]) => Boolean(key)),
+    );
+
+    let created = 0;
+    let updated = 0;
+    for (const policy of RISK_POLICY) {
+      const systemKey = String(policy.configuration.systemKey);
+      const prior = byKey.get(systemKey);
+      if (prior?.id) {
+        await this.repo.update(targetVersionId, 'risk-policy', prior.id, {
+          ...policy,
+          id: prior.id,
+        });
+        updated += 1;
+      } else {
+        const record = await this.repo.create(targetVersionId, 'risk-policy', policy);
+        if (record.id) byKey.set(systemKey, record);
+        created += 1;
+      }
+    }
+
+    await prisma.$executeRaw`
+      INSERT INTO strategy_audit_events(version_id, action, actor_type, new_value, reason)
+      VALUES (
+        CONVERT(uniqueidentifier, ${targetVersionId}),
+        ${'RISK_POLICY_RECONCILED'},
+        ${'SYSTEM'},
+        ${JSON.stringify({ created, updated, policyCount: RISK_POLICY.length })},
+        ${'Risk & sensitivity policies reconciled; severity labels only; no fabricated probability scores'}
+      )
+    `;
+
+    return { created, updated, total: RISK_POLICY.length };
+  }
+
+  async reconcileSelectionThresholds(versionId?: string) {
+    await this.repo.ensureDraft();
+    const overview = await this.repo.overview();
+    const targetVersionId = versionId ?? overview.versionId;
+    if (!targetVersionId) throw new Error('No strategy version available');
+    if (!isMutableStrategyStatus(overview.status) && !versionId) {
+      throw new Error('Activated strategy history is immutable');
+    }
+
+    const existing = await this.repo.list(targetVersionId, 'selection-thresholds');
+    for (const record of existing) {
+      const key = String(record.configuration?.systemKey ?? '');
+      if (key === 'policy.selection-thresholds' && record.id) {
+        await this.repo.update(targetVersionId, 'selection-thresholds', record.id, {
+          name: record.name,
+          description: record.description ?? '',
+          status: 'ARCHIVED',
+          priority: record.priority,
+          configuration: {
+            ...record.configuration,
+            archivedReason: 'Superseded by autonomous selection threshold rules',
+          },
+          effectiveFrom: record.effectiveFrom ?? null,
+          effectiveTo: record.effectiveTo ?? null,
+        });
+      }
+    }
+
+    const live = (await this.repo.list(targetVersionId, 'selection-thresholds')).filter(
+      (record) => record.status !== 'ARCHIVED',
+    );
+    const byKey = new Map(
+      live
+        .map((record) => [String(record.configuration?.systemKey ?? ''), record] as const)
+        .filter(([key]) => Boolean(key)),
+    );
+
+    let created = 0;
+    let updated = 0;
+    for (const policy of SELECTION_THRESHOLDS) {
+      const systemKey = String(policy.configuration.systemKey);
+      const prior = byKey.get(systemKey);
+      if (prior?.id) {
+        await this.repo.update(targetVersionId, 'selection-thresholds', prior.id, {
+          ...policy,
+          id: prior.id,
+        });
+        updated += 1;
+      } else {
+        const record = await this.repo.create(targetVersionId, 'selection-thresholds', policy);
+        if (record.id) byKey.set(systemKey, record);
+        created += 1;
+      }
+    }
+
+    await prisma.$executeRaw`
+      INSERT INTO strategy_audit_events(version_id, action, actor_type, new_value, reason)
+      VALUES (
+        CONVERT(uniqueidentifier, ${targetVersionId}),
+        ${'SELECTION_THRESHOLDS_RECONCILED'},
+        ${'SYSTEM'},
+        ${JSON.stringify({ created, updated, policyCount: SELECTION_THRESHOLDS.length })},
+        ${'Selection thresholds reconciled; decision gates only; no fabricated accuracy scores'}
+      )
+    `;
+
+    return { created, updated, total: SELECTION_THRESHOLDS.length };
+  }
+
+  async reconcilePortfolio(versionId?: string) {
+    await this.repo.ensureDraft();
+    const overview = await this.repo.overview();
+    const targetVersionId = versionId ?? overview.versionId;
+    if (!targetVersionId) throw new Error('No strategy version available');
+    if (!isMutableStrategyStatus(overview.status) && !versionId) {
+      throw new Error('Activated strategy history is immutable');
+    }
+
+    const existing = await this.repo.list(targetVersionId, 'portfolio');
+    for (const record of existing) {
+      const key = String(record.configuration?.systemKey ?? '');
+      if (key === 'policy.portfolio' && record.id) {
+        await this.repo.update(targetVersionId, 'portfolio', record.id, {
+          name: record.name,
+          description: record.description ?? '',
+          status: 'ARCHIVED',
+          priority: record.priority,
+          configuration: {
+            ...record.configuration,
+            archivedReason: 'Superseded by portfolio allocation rules',
+          },
+          effectiveFrom: record.effectiveFrom ?? null,
+          effectiveTo: record.effectiveTo ?? null,
+        });
+      }
+    }
+
+    const live = (await this.repo.list(targetVersionId, 'portfolio')).filter(
+      (record) => record.status !== 'ARCHIVED',
+    );
+    const byKey = new Map(
+      live
+        .map((record) => [String(record.configuration?.systemKey ?? ''), record] as const)
+        .filter(([key]) => Boolean(key)),
+    );
+
+    let created = 0;
+    let updated = 0;
+    for (const policy of PORTFOLIO_POLICY) {
+      const systemKey = String(policy.configuration.systemKey);
+      const prior = byKey.get(systemKey);
+      if (prior?.id) {
+        await this.repo.update(targetVersionId, 'portfolio', prior.id, {
+          ...policy,
+          id: prior.id,
+        });
+        updated += 1;
+      } else {
+        const record = await this.repo.create(targetVersionId, 'portfolio', policy);
+        if (record.id) byKey.set(systemKey, record);
+        created += 1;
+      }
+    }
+
+    await prisma.$executeRaw`
+      INSERT INTO strategy_audit_events(version_id, action, actor_type, new_value, reason)
+      VALUES (
+        CONVERT(uniqueidentifier, ${targetVersionId}),
+        ${'PORTFOLIO_RECONCILED'},
+        ${'SYSTEM'},
+        ${JSON.stringify({ created, updated, policyCount: PORTFOLIO_POLICY.length })},
+        ${'Portfolio allocation rules reconciled; normative share bands only; utilization UNMEASURED'}
+      )
+    `;
+
+    return { created, updated, total: PORTFOLIO_POLICY.length };
   }
 
   private async executeObjectivesRun(runId: string, versionId: string) {

@@ -38,6 +38,58 @@ export const sectionKeys = [
 ] as const;
 export type SectionKey = (typeof sectionKeys)[number];
 
+export type FunnelStage = {
+  key: string;
+  label: string;
+  records: number;
+  durationMs: number | null;
+  confidence: number | null;
+  failures: number;
+  successRate: number | null;
+  state: 'pending' | 'active' | 'done' | 'failed';
+};
+
+export type QualificationCandidateCard = {
+  id: string;
+  title: string;
+  summary: string;
+  domain: string;
+  geography: string | null;
+  audience: string | null;
+  status: QualificationStatus;
+  score: number;
+  measuredScore: boolean;
+  confidence: number;
+  measuredConfidence: boolean;
+  gateStatus: string;
+  decision: string | null;
+  decisionReason: string | null;
+  rankPosition: number | null;
+  evidencePassed: number;
+  evidenceFailed: number;
+  maxDuplicateSimilarity: number | null;
+  riskScore: number | null;
+  factors: Partial<FactorScores> | null;
+  explanation: string | null;
+  modelVersion: string | null;
+  nextAction: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type RadarDimension = {
+  key: string;
+  label: string;
+  value: number | null;
+};
+
+export type RiskCategorySummary = {
+  category: string;
+  count: number;
+  avgScore: number | null;
+  maxSeverity: string | null;
+};
+
 export type QualificationOverview = {
   available: boolean;
   reason?: string;
@@ -47,15 +99,107 @@ export type QualificationOverview = {
     checksum: string;
     status: string;
     receivedAt: string;
+    strategyVersionId?: string;
   };
   cycle?: {
     id: string;
     status: string;
     startedAt: string;
+    completedAt?: string | null;
+    failureReason?: string | null;
   };
+  /** @deprecated prefer `kpi` — retained for section shells */
   metrics?: Record<string, number>;
   pipeline?: Array<{ stage: string; status: string; count: number }>;
-  blockers?: Array<{ id: string; severity: string; message: string }>;
+  blockers?: Array<{
+    id: string;
+    severity: string;
+    message: string;
+    recommendation?: string | null;
+  }>;
+  kpi: {
+    ideasReceived: number;
+    ideasPassed: number;
+    ideasRejected: number;
+    underReview: number;
+    aiConfidence: number | null;
+    evidenceSufficiency: number | null;
+    strategyAlignment: number | null;
+    originalityScore: number | null;
+    commercialPotential: number | null;
+    productionCost: number | null;
+    estimatedRoi: number | null;
+    audienceDemand: number | null;
+    riskScore: number | null;
+    feasibilityScore: number | null;
+    approvalRate: number | null;
+    averageQualificationTimeMs: number | null;
+  };
+  engine: {
+    status: string;
+    currentModel: string | null;
+    reasoningEngine: string;
+    confidence: number | null;
+    knowledgeSources: number;
+    policyVersion: string | null;
+    strategyVersion: string | null;
+    promptVersion: string | null;
+    learningVersion: string | null;
+  };
+  funnel: FunnelStage[];
+  candidates: QualificationCandidateCard[];
+  radar: RadarDimension[];
+  risks: RiskCategorySummary[];
+  evidenceCoverage: {
+    totalChecks: number;
+    passed: number;
+    failed: number;
+    blocking: number;
+    coveragePct: number | null;
+  };
+  duplicates: {
+    checks: number;
+    blocking: number;
+    avgSimilarity: number | null;
+    maxSimilarity: number | null;
+  };
+  recommendations: Array<{
+    id: string;
+    action: string;
+    reason: string;
+    priority: 'HIGH' | 'MEDIUM' | 'LOW';
+    candidateId?: string;
+  }>;
+  timeline: Array<{
+    key: string;
+    label: string;
+    at: string | null;
+    count: number;
+    done: boolean;
+  }>;
+  decisions: Array<{
+    id: string;
+    candidateId: string;
+    title: string;
+    decision: string;
+    reason: string;
+    source: string;
+    createdAt: string;
+  }>;
+  audit: Array<{
+    id: string;
+    action: string;
+    actorType: string;
+    createdAt: string;
+    reason: string | null;
+  }>;
+  governance: {
+    auditEvents: number;
+    decisions: number;
+    digitalSignatures: number;
+    immutableRecords: number;
+    policyVersion: string | null;
+  };
   lastUpdated?: string;
 };
 

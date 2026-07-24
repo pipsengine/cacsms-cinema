@@ -1,10 +1,10 @@
 import type { Metadata } from 'next';
-import { StrategyWorkspace } from '@/apps/web/components/strategy/StrategyWorkspace';
+import { StrategyOverviewWorkspace } from '@/apps/web/components/strategy/StrategyOverviewWorkspace';
 
 export const metadata: Metadata = {
   title: 'Strategy Overview',
 };
 
 export default function StrategyPage() {
-  return <StrategyWorkspace />;
+  return <StrategyOverviewWorkspace />;
 }

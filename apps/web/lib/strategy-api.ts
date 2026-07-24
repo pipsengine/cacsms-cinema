@@ -60,10 +60,104 @@ export const strategyApi = {
     request<
       Array<{
         id: string;
+        versionId?: string | null;
         action: string;
         actorType: string;
+        actorReference?: string | null;
+        requestId?: string | null;
+        correlationId?: string | null;
+        previousValue?: string | null;
+        newValue?: string | null;
         createdAt: string;
         reason: string | null;
       }>
     >(`/strategy/versions/${versionId}/audit`),
+  strategyAudit: () =>
+    request<
+      Array<{
+        id: string;
+        versionId: string | null;
+        versionNumber: number | null;
+        versionStatus: string | null;
+        action: string;
+        actorType: string;
+        actorReference: string | null;
+        requestId: string | null;
+        correlationId: string | null;
+        previousValue: string | null;
+        newValue: string | null;
+        reason: string | null;
+        createdAt: string;
+      }>
+    >('/strategy/audit'),
+  validation: (versionId: string) =>
+    request<{
+      run: {
+        id: string;
+        status: string;
+        startedAt: string;
+        completedAt: string | null;
+        summary: Record<string, unknown> | null;
+      } | null;
+      results: Array<{
+        id: string;
+        ruleCode: string;
+        ruleVersion: number;
+        severity: string;
+        passed: boolean;
+        blocking: boolean;
+        sectionKey: string | null;
+        explanation: string;
+        recommendation: string | null;
+        checkedAt: string;
+      }>;
+    }>(`/strategy/versions/${versionId}/validation`),
+  versions: () =>
+    request<{
+      strategyId: string | null;
+      currentVersionId: string | null;
+      versions: Array<{
+        id: string;
+        versionNumber: number;
+        status: string;
+        effectiveDate: string | null;
+        lastValidatedAt: string | null;
+        createdAt: string;
+        updatedAt: string;
+        checksum: string | null;
+        recordCount: number;
+        sectionCount: number;
+        sectionCounts: Record<string, number>;
+        createdBy: string;
+        createAction: string | null;
+        createReason: string | null;
+      }>;
+    }>('/strategy/versions'),
+  compareVersions: (leftId: string, rightId: string) =>
+    request<{
+      leftId: string;
+      rightId: string;
+      modules: Array<{
+        section: string;
+        label: string;
+        leftCount: number;
+        rightCount: number;
+        added: string[];
+        removed: string[];
+        unchanged: number;
+        modified: number;
+      }>;
+      totals: { added: number; removed: number; unchanged: number };
+    }>(`/strategy/versions/compare?left=${encodeURIComponent(leftId)}&right=${encodeURIComponent(rightId)}`),
+  rollback: (versionId: string) =>
+    request<{
+      id: string;
+      versionNumber: number;
+      status: string;
+      sourceVersionId: string;
+      clonedRecords: number;
+    }>(`/strategy/versions/${versionId}/rollback`, {
+      method: 'POST',
+      headers: { 'idempotency-key': crypto.randomUUID() },
+    }),
 };

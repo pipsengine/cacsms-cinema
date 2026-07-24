@@ -11,7 +11,12 @@ import { FormatsWorkspace } from '@/apps/web/components/strategy/FormatsWorkspac
 import { ChannelsWorkspace } from '@/apps/web/components/strategy/ChannelsWorkspace';
 import { LocalisationWorkspace } from '@/apps/web/components/strategy/LocalisationWorkspace';
 import { SourcePolicyWorkspace } from '@/apps/web/components/strategy/SourcePolicyWorkspace';
-import { OperationalWorkspace } from '@/apps/web/components/strategy/OperationalWorkspace';
+import { RiskPolicyWorkspace } from '@/apps/web/components/strategy/RiskPolicyWorkspace';
+import { SelectionThresholdsWorkspace } from '@/apps/web/components/strategy/SelectionThresholdsWorkspace';
+import { PortfolioWorkspace } from '@/apps/web/components/strategy/PortfolioWorkspace';
+import { ValidationWorkspace } from '@/apps/web/components/strategy/ValidationWorkspace';
+import { VersionsWorkspace } from '@/apps/web/components/strategy/VersionsWorkspace';
+import { AuditWorkspace } from '@/apps/web/components/strategy/AuditWorkspace';
 import { getSection } from '@/apps/web/lib/strategy-config';
 
 const OPERATIONAL_TITLES: Record<string, string> = {
@@ -48,10 +53,13 @@ export default async function StrategySectionPage({
   if (section === 'channels') return <ChannelsWorkspace />;
   if (section === 'localisation') return <LocalisationWorkspace />;
   if (section === 'source-policy') return <SourcePolicyWorkspace />;
+  if (section === 'risk-policy') return <RiskPolicyWorkspace />;
+  if (section === 'selection-thresholds') return <SelectionThresholdsWorkspace />;
+  if (section === 'portfolio') return <PortfolioWorkspace />;
+  if (section === 'validation') return <ValidationWorkspace />;
+  if (section === 'versions') return <VersionsWorkspace />;
+  if (section === 'audit') return <AuditWorkspace />;
   const item = getSection(section);
   if (item) return <StrategyWorkspace sectionKey={item.key} />;
-  if (section === 'validation' || section === 'versions' || section === 'audit') {
-    return <OperationalWorkspace mode={section} />;
-  }
   notFound();
 }

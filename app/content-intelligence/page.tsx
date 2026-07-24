@@ -1,5 +1,5 @@
-import { IntelligenceWorkspace } from '@/apps/web/components/intelligence/IntelligenceWorkspace';
+import { IntelligenceOverviewWorkspace } from '@/apps/web/components/intelligence/IntelligenceOverviewWorkspace';
 
 export default function ContentIntelligencePage() {
-  return <IntelligenceWorkspace />;
+  return <IntelligenceOverviewWorkspace />;
 }
