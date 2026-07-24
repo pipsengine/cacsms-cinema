@@ -7,6 +7,16 @@ import type { IntelligenceIntakeOverview } from '@/lib/idea-qualification/intake
 import type { CandidatePoolOverview } from '@/lib/idea-qualification/candidate-pool';
 import type { EvidenceSufficiencyOverview } from '@/lib/idea-qualification/evidence';
 import type { StrategicFitOverview } from '@/lib/idea-qualification/strategic-fit';
+import type { AudienceValueOverview } from '@/lib/idea-qualification/audience-value';
+import type { OriginalityOverview } from '@/lib/idea-qualification/originality';
+import type { DuplicateDetectionIQOverview } from '@/lib/idea-qualification/duplicates';
+import type { ProductionFeasibilityOverview } from '@/lib/idea-qualification/feasibility';
+import type { VisualPotentialOverview } from '@/lib/idea-qualification/visual-potential';
+import type { RiskSensitivityOverview } from '@/lib/idea-qualification/risk';
+import type { QualificationScoringOverview } from '@/lib/idea-qualification/qualification-scoring';
+import type { MandatoryGatesOverview } from '@/lib/idea-qualification/gates';
+import type { QualifiedRankingOverview } from '@/lib/idea-qualification/ranking';
+import type { DecisionRegisterOverview } from '@/lib/idea-qualification/decisions';
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`/api${path}`, {
@@ -38,6 +48,24 @@ export const qualificationApi = {
     request<EvidenceSufficiencyOverview>('/idea-qualification/evidence'),
   strategicFit: () =>
     request<StrategicFitOverview>('/idea-qualification/strategic-fit'),
+  audienceValue: () =>
+    request<AudienceValueOverview>('/idea-qualification/audience-value'),
+  originality: () =>
+    request<OriginalityOverview>('/idea-qualification/originality'),
+  duplicates: () =>
+    request<DuplicateDetectionIQOverview>('/idea-qualification/duplicates'),
+  feasibility: () =>
+    request<ProductionFeasibilityOverview>('/idea-qualification/feasibility'),
+  visualPotential: () =>
+    request<VisualPotentialOverview>('/idea-qualification/visual-potential'),
+  risk: () => request<RiskSensitivityOverview>('/idea-qualification/risk'),
+  scoring: () =>
+    request<QualificationScoringOverview>('/idea-qualification/scoring'),
+  gates: () => request<MandatoryGatesOverview>('/idea-qualification/gates'),
+  ranking: () =>
+    request<QualifiedRankingOverview>('/idea-qualification/ranking'),
+  decisions: () =>
+    request<DecisionRegisterOverview>('/idea-qualification/decisions'),
   list: (section: SectionKey) =>
     request<Candidate[]>(`/idea-qualification/${section}`),
   run: () =>
