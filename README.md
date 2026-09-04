@@ -17,7 +17,7 @@ Core lifecycle:
 - `packages/ui` — shared Figma-style design system components
 - `packages/types` — shared domain contracts
 - `packages/config` — shared runtime/configuration helpers
-- `packages/database` — database schema/client layer
+- `packages/database` — Microsoft SQL Server client, migrations, seeds and schema layer
 - `docs` — architecture, module specifications, API/database/design/operations docs
 - `infra` — Docker, reverse proxy and deployment scripts
 - `.github/workflows` — CI pipelines
@@ -41,14 +41,28 @@ git push -u origin main
 
 - Node.js 22+
 - pnpm 10+
-- PostgreSQL 16+ (planned production default)
+- Microsoft SQL Server 2019+ / SQL Server 2022 recommended
 - Docker Desktop (recommended)
 
 ## First development steps
 
+1. Copy `.env.example` to `.env` and change the MSSQL password.
+2. Start the local SQL Server container:
+
+```bash
+docker compose up -d mssql
+```
+
+3. Create the database with `infra/mssql/create-database.sql`, then install and migrate:
+
 ```bash
 pnpm install
+pnpm --filter @acg/database db:migrate
+pnpm --filter @acg/database db:seed
+pnpm --filter @acg/database db:ping
 pnpm dev
 ```
 
-The starter currently provides the repository foundation, module boundaries, workflow contracts, UI tokens and placeholder applications. We will add each production module to this repo in sequence.
+See `docs/database/MSSQL.md` for production database guidance.
+
+The starter currently provides the repository foundation, MSSQL persistence layer, module boundaries, workflow contracts, UI tokens and placeholder applications. We will add each production module to this repo in sequence.
