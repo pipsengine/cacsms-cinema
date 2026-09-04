@@ -6,7 +6,7 @@
     "dev": "next dev -p 3000",
     "build": "next build",
     "start": "next start -p 3000",
-    "lint": "next lint || true",
+    "lint": "node -e \"console.log('web lint: pending eslint config + rule package')\"",
     "typecheck": "tsc --noEmit",
     "test": "node -e \"console.log('web tests: pending module implementation')\""
   },
