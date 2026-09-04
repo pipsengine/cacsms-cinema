@@ -1,0 +1,1 @@
+{"name":"@acg/database","version":"0.1.0","private":true,"scripts":{"build":"node -e \"console.log('database build placeholder')\"","lint":"node -e \"console.log('database lint placeholder')\"","typecheck":"node -e \"console.log('database typecheck placeholder')\"","test":"node -e \"console.log('database tests placeholder')\""}}
