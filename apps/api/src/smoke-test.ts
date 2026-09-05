@@ -1,8 +1,9 @@
 console.log('Module 01 API contracts: auth, workspaces, users, roles, password recovery.');
 console.log('Module 02 API contracts: command-center, project controls/stages, my-work, notifications.');
-console.log('Module 03 API contracts: content projects + assets, versions, approvals, handoffs.');
-console.log('Module 04 API contracts: strategy brief, strategy versions, strategy save/submit/decide.');
-console.log('Module 05 API contracts: opportunity projects, discovery runs, opportunity save/decide.');
-console.log('Module 06 API contracts: research projects, pack start/save/submit/decide, sources, claims, facts, versions.');
-console.log('Module 07 API contracts: script project register, concept generate/decide, script start/save, claim links, retention, submit/decision.');
+console.log('Module 03 API contracts: content-projects CRUD, assets, versions, approvals, activities, handoffs.');
+console.log('Module 04 API contracts: strategy-briefs list/save/submit/decision + audience/platform/metrics/references.');
+console.log('Module 05 API contracts: opportunities list/discovery run + per-project saved/decide/save/shortlist.');
+console.log('Module 06 API contracts: research pack start/save/sources/claims/submit/decision.');
+console.log('Module 07 API contracts: script concepts generate/decide, sections save, submit, approve/return.');
 console.log('Module 08 API contracts: scene planning register, production-planning start, characters/scenes save, submit, continuity + approve/return.');
+console.log('Module 09 API contracts: generation projects register, workspace queue, jobs create/update, assets register/decide, stage complete.');
