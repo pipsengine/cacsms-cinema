@@ -7,3 +7,4 @@ console.log('Module 06 API contracts: research pack start/save/sources/claims/su
 console.log('Module 07 API contracts: script concepts generate/decide, sections save, submit, approve/return.');
 console.log('Module 08 API contracts: scene planning register, production-planning start, characters/scenes save, submit, continuity + approve/return.');
 console.log('Module 09 API contracts: generation projects register, workspace queue, jobs create/update, assets register/decide, stage complete.');
+console.log('Module 10 API contracts: editing projects workspace, timelines save, instructions add, QA checks update, master versions/decide.');

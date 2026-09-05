@@ -1,0 +1,2 @@
+import Link from 'next/link';
+export function EditingTabs({projectId,active}:{projectId:string;active:string}){const tabs=[['Timeline','timeline'],['Edit Instructions','instructions'],['Quality Assurance','qa'],['Master Preview','preview'],['Versions','versions']];return <div className="module-tabs">{tabs.map(([label,key])=><Link key={key} href={`/projects/${projectId}/editing/${key}`} className={active===key?'active':''}>{label}</Link>)}</div>}
