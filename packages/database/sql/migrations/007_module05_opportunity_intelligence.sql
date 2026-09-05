@@ -1,0 +1,40 @@
+IF OBJECT_ID('dbo.OpportunityDiscoveryRuns','U') IS NULL CREATE TABLE dbo.OpportunityDiscoveryRuns(
+ DiscoveryRunId UNIQUEIDENTIFIER NOT NULL DEFAULT NEWSEQUENTIALID() PRIMARY KEY, ContentProjectId UNIQUEIDENTIFIER NOT NULL, SourceHandoffId UNIQUEIDENTIFIER NULL,
+ Status NVARCHAR(30) NOT NULL DEFAULT 'NOT_STARTED', SearchScope NVARCHAR(100) NULL, SearchQueriesJson NVARCHAR(MAX) NULL, TargetMarketsJson NVARCHAR(MAX) NULL,
+ AgentProvider NVARCHAR(100) NULL, AgentModel NVARCHAR(100) NULL, StartedAt DATETIME2 NULL, CompletedAt DATETIME2 NULL, CreatedByUserId UNIQUEIDENTIFIER NULL,
+ CreatedAt DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(), UpdatedAt DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+ CONSTRAINT FK_OpportunityDiscoveryRuns_Project FOREIGN KEY(ContentProjectId) REFERENCES dbo.ContentProjects(ContentProjectId));
+GO
+IF OBJECT_ID('dbo.ContentOpportunities','U') IS NULL CREATE TABLE dbo.ContentOpportunities(
+ ContentOpportunityId UNIQUEIDENTIFIER NOT NULL DEFAULT NEWSEQUENTIALID() PRIMARY KEY, ContentProjectId UNIQUEIDENTIFIER NOT NULL, DiscoveryRunId UNIQUEIDENTIFIER NULL,
+ OpportunityCode NVARCHAR(40) NOT NULL, Title NVARCHAR(300) NOT NULL, Topic NVARCHAR(200) NOT NULL, Angle NVARCHAR(1000) NULL, HookIdea NVARCHAR(1000) NULL,
+ Rationale NVARCHAR(MAX) NULL, Status NVARCHAR(30) NOT NULL DEFAULT 'DISCOVERED', DecisionNote NVARCHAR(2000) NULL,
+ TrendMomentum DECIMAL(5,2) NOT NULL DEFAULT 0, SearchDemand DECIMAL(5,2) NOT NULL DEFAULT 0, CompetitionScore DECIMAL(5,2) NOT NULL DEFAULT 0,
+ GlobalAppeal DECIMAL(5,2) NOT NULL DEFAULT 0, AudienceFit DECIMAL(5,2) NOT NULL DEFAULT 0, RevenuePotential DECIMAL(5,2) NOT NULL DEFAULT 0,
+ EvergreenPotential DECIMAL(5,2) NOT NULL DEFAULT 0, NoveltyScore DECIMAL(5,2) NOT NULL DEFAULT 0, ProductionDifficulty DECIMAL(5,2) NOT NULL DEFAULT 0,
+ ViralPotential DECIMAL(5,2) NOT NULL DEFAULT 0, OverallScore DECIMAL(5,2) NOT NULL DEFAULT 0, ConfidenceScore DECIMAL(5,2) NOT NULL DEFAULT 0,
+ RecommendedFormat NVARCHAR(80) NULL, RecommendedDurationSeconds INT NULL, PrimaryPlatform NVARCHAR(60) NULL, TargetMarketsJson NVARCHAR(MAX) NULL,
+ KeywordsJson NVARCHAR(MAX) NULL, EvidenceSummary NVARCHAR(MAX) NULL, RiskFlagsJson NVARCHAR(MAX) NULL, SelectedAt DATETIME2 NULL, SelectedByUserId UNIQUEIDENTIFIER NULL,
+ CreatedAt DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(), UpdatedAt DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+ CONSTRAINT FK_ContentOpportunities_Project FOREIGN KEY(ContentProjectId) REFERENCES dbo.ContentProjects(ContentProjectId),
+ CONSTRAINT FK_ContentOpportunities_Run FOREIGN KEY(DiscoveryRunId) REFERENCES dbo.OpportunityDiscoveryRuns(DiscoveryRunId));
+GO
+IF NOT EXISTS(SELECT 1 FROM sys.indexes WHERE name='UX_ContentOpportunities_Code') CREATE UNIQUE INDEX UX_ContentOpportunities_Code ON dbo.ContentOpportunities(OpportunityCode);
+GO
+IF OBJECT_ID('dbo.OpportunityTrendSignals','U') IS NULL CREATE TABLE dbo.OpportunityTrendSignals(
+ OpportunityTrendSignalId UNIQUEIDENTIFIER NOT NULL DEFAULT NEWSEQUENTIALID() PRIMARY KEY, ContentOpportunityId UNIQUEIDENTIFIER NOT NULL,
+ SignalType NVARCHAR(60) NOT NULL, SourceName NVARCHAR(150) NULL, SourceUrl NVARCHAR(1000) NULL, Market NVARCHAR(100) NULL,
+ SignalValue DECIMAL(18,4) NULL, SignalUnit NVARCHAR(50) NULL, Direction NVARCHAR(20) NULL, EvidenceText NVARCHAR(1500) NULL, ObservedAt DATETIME2 NULL,
+ CreatedAt DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(), CONSTRAINT FK_OpportunityTrendSignals_Opportunity FOREIGN KEY(ContentOpportunityId) REFERENCES dbo.ContentOpportunities(ContentOpportunityId));
+GO
+IF OBJECT_ID('dbo.OpportunityAudienceScores','U') IS NULL CREATE TABLE dbo.OpportunityAudienceScores(
+ OpportunityAudienceScoreId UNIQUEIDENTIFIER NOT NULL DEFAULT NEWSEQUENTIALID() PRIMARY KEY, ContentOpportunityId UNIQUEIDENTIFIER NOT NULL,
+ Market NVARCHAR(100) NOT NULL, AudienceSegment NVARCHAR(150) NULL, AppealScore DECIMAL(5,2) NOT NULL DEFAULT 0, MonetizationScore DECIMAL(5,2) NOT NULL DEFAULT 0,
+ CompetitionScore DECIMAL(5,2) NOT NULL DEFAULT 0, Rationale NVARCHAR(1200) NULL, CreatedAt DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+ CONSTRAINT FK_OpportunityAudienceScores_Opportunity FOREIGN KEY(ContentOpportunityId) REFERENCES dbo.ContentOpportunities(ContentOpportunityId));
+GO
+IF OBJECT_ID('dbo.OpportunityDecisions','U') IS NULL CREATE TABLE dbo.OpportunityDecisions(
+ OpportunityDecisionId UNIQUEIDENTIFIER NOT NULL DEFAULT NEWSEQUENTIALID() PRIMARY KEY, ContentOpportunityId UNIQUEIDENTIFIER NOT NULL,
+ Decision NVARCHAR(30) NOT NULL, Note NVARCHAR(2000) NULL, DecidedByUserId UNIQUEIDENTIFIER NULL, DecidedAt DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+ CONSTRAINT FK_OpportunityDecisions_Opportunity FOREIGN KEY(ContentOpportunityId) REFERENCES dbo.ContentOpportunities(ContentOpportunityId));
+GO
