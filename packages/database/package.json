@@ -1,5 +1,5 @@
 {
-  "name": "@acg/database",
+  "name": "@cacsms/database",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -9,7 +9,8 @@
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
-      "import": "./dist/index.js"
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
     }
   },
   "files": ["dist", "sql"],
@@ -20,9 +21,12 @@
     "test": "node -e \"console.log('database tests: pending module implementation')\"",
     "db:ping": "tsx src/ping.ts",
     "db:migrate": "tsx src/migrate.ts",
-    "db:seed": "tsx src/seed.ts"
+    "db:seed": "tsx src/seed.ts",
+    "db:bootstrap": "tsx src/bootstrap-module01.ts",
+    "db:bootstrap-module02": "tsx src/bootstrap-module02.ts"
   },
   "dependencies": {
+    "bcryptjs": "^3.0.2",
     "mssql": "^11.0.1"
   },
   "devDependencies": {

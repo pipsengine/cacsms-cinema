@@ -1,0 +1,4 @@
+import type { ReactNode } from 'react';
+export function Status({children,tone='green'}:{children:ReactNode,tone?:'green'|'amber'|'red'|'blue'|'gray'|'purple'}){return <span className={`pill ${tone}`}><i/>{children}</span>}
+export function StatCard({label,value,detail,icon}:{label:string,value:string|number,detail:string,icon:string}){return <article className="stat-card"><div className="stat-icon">{icon}</div><div><span>{label}</span><strong>{value}</strong><small>{detail}</small></div></article>}
+export function SectionCard({title,subtitle,children,action}:{title:string,subtitle?:string,children:ReactNode,action?:ReactNode}){return <section className="section-card"><div className="section-head"><div><h2>{title}</h2>{subtitle&&<p>{subtitle}</p>}</div>{action}</div>{children}</section>}

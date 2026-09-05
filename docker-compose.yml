@@ -1,7 +1,7 @@
 services:
   mssql:
     image: mcr.microsoft.com/mssql/server:2022-latest
-    container_name: acg-mssql
+    container_name: cacsms-cinema-mssql
     restart: unless-stopped
     environment:
       ACCEPT_EULA: "Y"

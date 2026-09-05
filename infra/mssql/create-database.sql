@@ -1,5 +1,5 @@
-IF DB_ID(N'AutonomousContentGenerator') IS NULL
+IF DB_ID(N'CacsmsCinema') IS NULL
 BEGIN
-    CREATE DATABASE AutonomousContentGenerator;
+    CREATE DATABASE CacsmsCinema;
 END;
 GO

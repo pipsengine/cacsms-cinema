@@ -1,5 +1,5 @@
 export const appConfig = {
-  name: 'Autonomous Content Generator',
+  name: 'Cacsms Cinema',
   defaultTheme: 'light',
   defaultBackground: 'white'
 } as const;

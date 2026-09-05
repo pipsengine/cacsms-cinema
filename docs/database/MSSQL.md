@@ -1,6 +1,6 @@
 # Microsoft SQL Server Architecture
 
-The Autonomous Content Generator uses Microsoft SQL Server as its primary relational database.
+Cacsms Cinema uses Microsoft SQL Server as its primary relational database.
 
 ## Supported deployment targets
 
@@ -19,17 +19,17 @@ docker compose up -d mssql
 Create the application database once SQL Server is healthy:
 
 ```sql
-IF DB_ID(N'AutonomousContentGenerator') IS NULL
-    CREATE DATABASE AutonomousContentGenerator;
+IF DB_ID(N'CacsmsCinema') IS NULL
+    CREATE DATABASE CacsmsCinema;
 ```
 
 Then run:
 
 ```bash
 pnpm install
-pnpm --filter @acg/database db:migrate
-pnpm --filter @acg/database db:seed
-pnpm --filter @acg/database db:ping
+pnpm --filter @cacsms/database db:migrate
+pnpm --filter @cacsms/database db:seed
+pnpm --filter @cacsms/database db:ping
 ```
 
 ## Production rules
