@@ -1,0 +1,2 @@
+import Link from 'next/link';
+export function PackagingTabs({projectId,active}:{projectId:string;active:string}){const tabs=[['Thumbnail Studio','thumbnails'],['SEO & Metadata','seo'],['Captions & Chapters','captions'],['Platform Variants','platforms'],['Versions & Governance','versions']];return <div className="module-tabs">{tabs.map(([label,key])=><Link key={key} href={`/projects/${projectId}/packaging/${key}`} className={active===key?'active':''}>{label}</Link>)}</div>}
