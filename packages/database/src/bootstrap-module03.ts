@@ -1,60 +1,22 @@
-import { closeDb, getDb, sql } from './index.js';
-import { loadRootEnv } from './load-env.js';
-
-loadRootEnv({ override: true });
-
-const email = process.env.BOOTSTRAP_ADMIN_EMAIL || 'cacsms@cacsms.com';
-
-try {
-  const db = await getDb();
-  const base = await db.request().input('email', sql.NVarChar(320), email).query(`
-    SELECT u.UserId, w.WorkspaceId
-    FROM dbo.Users u
-    CROSS JOIN dbo.Workspaces w
-    WHERE u.Email = @email AND w.Slug = 'cacsms-cinema'
-  `);
-  const row = base.recordset[0];
-  if (!row) throw new Error('Run Module 01 bootstrap first.');
-  const uid = row.UserId;
-  const ws = row.WorkspaceId;
-
-  const meta: any = {
-    'CAC-2026-000124': ['A cinematic explainer revealing the everyday AI systems people use without noticing.', 'Long Form', 'YouTube', 'Global English-speaking viewers, 16–45', '["Global","United States","United Kingdom","Canada"]', 'English', 540, '16:9', 'AI & Technology', 'Educate & grow subscribers', 'HIGH', 4, 85, 'Cinematic documentary'],
-    'CAC-2026-000123': ['Future-of-work narrative exploring autonomous management and human decision making.', 'Long Form', 'YouTube', 'Professionals and technology-curious adults', '["Global","United States","United Kingdom"]', 'English', 540, '16:9', 'Future of Work', 'Drive watch time', 'URGENT', 2, 110, 'Premium documentary'],
-    'CAC-2026-000122': ['Short-form Nigerian social story about automation entering hospitality.', 'Short Form', 'YouTube Shorts', 'Global social video audience, 13–40', '["Nigeria","Global"]', 'English', 120, '9:16', 'AI Stories', 'Reach new viewers', 'MEDIUM', 5, 45, 'Realistic social cinema'],
-    'CAC-2026-000121': ['Privacy-focused technology explainer with practical actions.', 'Long Form', 'YouTube', 'Smartphone users, 15–55', '["Global"]', 'English', 390, '16:9', 'Cybersecurity', 'Educate', 'HIGH', 3, 60, 'Clean technology documentary'],
-    'CAC-2026-000120': ['Fast science fact story built for high-retention short-form viewing.', 'Short Form', 'YouTube Shorts', 'Students and general audience', '["Global"]', 'English', 60, '9:16', 'Science', 'Reach & engagement', 'LOW', -1, 25, 'Premium science short']
-  };
-
-  let updated = 0;
-  for (const code of Object.keys(meta)) {
-    const [desc, type, platform, audience, countries, language, duration, ratio, category, objective, priority, days, budget, creative] = meta[code];
-    const result = await db.request()
-      .input('ws', sql.UniqueIdentifier, ws).input('uid', sql.UniqueIdentifier, uid).input('code', sql.NVarChar(30), code)
-      .input('desc', sql.NVarChar(1500), desc).input('type', sql.NVarChar(50), type).input('platform', sql.NVarChar(50), platform)
-      .input('audience', sql.NVarChar(500), audience).input('countries', sql.NVarChar(sql.MAX), countries)
-      .input('language', sql.NVarChar(50), language).input('duration', sql.Int, duration).input('ratio', sql.NVarChar(20), ratio)
-      .input('category', sql.NVarChar(100), category).input('objective', sql.NVarChar(100), objective)
-      .input('priority', sql.NVarChar(20), priority).input('days', sql.Int, days).input('budget', sql.Decimal(18, 2), budget)
-      .input('creative', sql.NVarChar(100), creative)
-      .query(`
-        UPDATE dbo.ContentProjects
-        SET Description=@desc, ContentType=@type, PrimaryPlatform=@platform, TargetAudience=@audience, TargetCountriesJson=@countries,
-            Language=@language, PlannedDurationSeconds=@duration, AspectRatio=@ratio, Category=@category, Objective=@objective,
-            Priority=@priority, DeadlineAt=CASE WHEN @days<0 THEN NULL ELSE DATEADD(day,@days,SYSUTCDATETIME()) END,
-            BudgetLimit=@budget, CreativeDirection=@creative, CreatedByUserId=ISNULL(CreatedByUserId,@uid), UpdatedAt=SYSUTCDATETIME()
-        WHERE WorkspaceId=@ws AND ContentCode=@code;
-        DECLARE @p UNIQUEIDENTIFIER=(SELECT ContentProjectId FROM dbo.ContentProjects WHERE WorkspaceId=@ws AND ContentCode=@code);
-        IF @p IS NOT NULL AND NOT EXISTS(SELECT 1 FROM dbo.ProjectDistributionTargets WHERE ContentProjectId=@p AND Platform=@platform)
-          INSERT dbo.ProjectDistributionTargets(ContentProjectId,Platform,ContentFormat,IsPrimary,AspectRatio,TargetDurationSeconds)
-          VALUES(@p,@platform,@type,1,@ratio,@duration);
-        SELECT @@ROWCOUNT AS RowsAffected, @p AS ProjectId;
-      `);
-    if (result.recordset[0]?.ProjectId) updated += 1;
-  }
-
-  console.log(`Module 03 content-project bootstrap complete (enriched ${updated} existing project(s)).`);
-  if (!updated) console.log('No CAC-2026-000120…124 projects found — create projects via /projects/new (live DB).');
-} finally {
-  await closeDb();
-}
+import {closeDb,getDb,sql} from './index.js';
+const email=process.env.BOOTSTRAP_ADMIN_EMAIL||'pipsengine@gmail.com';
+try{
+ const db=await getDb();const base=await db.request().input('email',sql.NVarChar(320),email).query(`SELECT u.UserId,w.WorkspaceId FROM dbo.Users u CROSS JOIN dbo.Workspaces w WHERE u.Email=@email AND w.Slug='cacsms-cinemas'`);const row=base.recordset[0];if(!row)throw new Error('Run Module 01 bootstrap first.');const uid=row.UserId,ws=row.WorkspaceId;
+ const meta:any={
+ 'CAC-2026-000124':['A cinematic explainer revealing the everyday AI systems people use without noticing.','Long Form','YouTube','Global English-speaking viewers, 16–45','["Global","United States","United Kingdom","Canada"]','English',540,'16:9','AI & Technology','Educate & grow subscribers','HIGH',4,85,'Cinematic documentary'],
+ 'CAC-2026-000123':['Future-of-work narrative exploring autonomous management and human decision making.','Long Form','YouTube','Professionals and technology-curious adults','["Global","United States","United Kingdom"]','English',540,'16:9','Future of Work','Drive watch time','URGENT',2,110,'Premium documentary'],
+ 'CAC-2026-000122':['Short-form Nigerian social story about automation entering hospitality.','Short Form','YouTube Shorts','Global social video audience, 13–40','["Nigeria","Global"]','English',120,'9:16','AI Stories','Reach new viewers','MEDIUM',5,45,'Realistic social cinema'],
+ 'CAC-2026-000121':['Privacy-focused technology explainer with practical actions.','Long Form','YouTube','Smartphone users, 15–55','["Global"]','English',390,'16:9','Cybersecurity','Educate','HIGH',3,60,'Clean technology documentary'],
+ 'CAC-2026-000120':['Fast science fact story built for high-retention short-form viewing.','Short Form','YouTube Shorts','Students and general audience','["Global"]','English',60,'9:16','Science','Reach & engagement','LOW',-1,25,'Premium science short']};
+ for(const code of Object.keys(meta)){const [desc,type,platform,audience,countries,language,duration,ratio,category,objective,priority,days,budget,creative]=meta[code];await db.request().input('ws',sql.UniqueIdentifier,ws).input('uid',sql.UniqueIdentifier,uid).input('code',sql.NVarChar(30),code).input('desc',sql.NVarChar(1500),desc).input('type',sql.NVarChar(50),type).input('platform',sql.NVarChar(50),platform).input('audience',sql.NVarChar(500),audience).input('countries',sql.NVarChar(sql.MAX),countries).input('language',sql.NVarChar(50),language).input('duration',sql.Int,duration).input('ratio',sql.NVarChar(20),ratio).input('category',sql.NVarChar(100),category).input('objective',sql.NVarChar(100),objective).input('priority',sql.NVarChar(20),priority).input('days',sql.Int,days).input('budget',sql.Decimal(18,2),budget).input('creative',sql.NVarChar(100),creative).query(`UPDATE dbo.ContentProjects SET Description=@desc,ContentType=@type,PrimaryPlatform=@platform,TargetAudience=@audience,TargetCountriesJson=@countries,Language=@language,PlannedDurationSeconds=@duration,AspectRatio=@ratio,Category=@category,Objective=@objective,Priority=@priority,DeadlineAt=CASE WHEN @days<0 THEN NULL ELSE DATEADD(day,@days,SYSUTCDATETIME()) END,BudgetLimit=@budget,CreativeDirection=@creative,CreatedByUserId=ISNULL(CreatedByUserId,@uid),UpdatedAt=SYSUTCDATETIME() WHERE WorkspaceId=@ws AND ContentCode=@code; DECLARE @p UNIQUEIDENTIFIER=(SELECT ContentProjectId FROM dbo.ContentProjects WHERE WorkspaceId=@ws AND ContentCode=@code); IF NOT EXISTS(SELECT 1 FROM dbo.ProjectDistributionTargets WHERE ContentProjectId=@p AND Platform=@platform) INSERT dbo.ProjectDistributionTargets(ContentProjectId,Platform,ContentFormat,IsPrimary,AspectRatio,TargetDurationSeconds) VALUES(@p,@platform,@type,1,@ratio,@duration);`)}
+ const pid=(await db.request().input('ws',sql.UniqueIdentifier,ws).query(`SELECT ContentProjectId FROM dbo.ContentProjects WHERE WorkspaceId=@ws AND ContentCode='CAC-2026-000124'`)).recordset[0]?.ContentProjectId;if(pid){
+  const versions=[['CONTENT_BRIEF',1,'STRATEGY_BRIEF','Initial content brief','Initial approved strategic direction.'],['RESEARCH_PACK',2,'RESEARCH','Research pack','Added primary-source references and conflict notes.'],['SCRIPT',3,'SCRIPT','Approved script','Hook tightened and factual citations aligned.'],['PROJECT_SNAPSHOT',6,'SCENE_MATRIX','Pre-production snapshot','Scene matrix approved; generation package created.']];
+  for(const [type,no,stage,title,summary] of versions as any[]){await db.request().input('pid',sql.UniqueIdentifier,pid).input('type',sql.NVarChar(60),type).input('no',sql.Int,no).input('stage',sql.NVarChar(80),stage).input('title',sql.NVarChar(250),title).input('summary',sql.NVarChar(1000),summary).input('uid',sql.UniqueIdentifier,uid).query(`IF NOT EXISTS(SELECT 1 FROM dbo.ProjectVersions WHERE ContentProjectId=@pid AND VersionType=@type AND VersionNumber=@no) INSERT dbo.ProjectVersions(ContentProjectId,VersionType,VersionNumber,SourceStageKey,Title,SnapshotJson,ChangeSummary,IsApproved,CreatedByUserId) VALUES(@pid,@type,@no,@stage,@title,'{}',@summary,1,@uid)`)}
+  const assets=[['IMAGE','SC09-master-character-reference.png','CHARACTER_BIBLE',3,'APPROVED',4800000],['IMAGE','SC10-city-ai-visual-v4.png','IMAGE_GENERATION',4,'ACTIVE',5200000],['DOCUMENT','research-pack-v2.json','RESEARCH',2,'APPROVED',128000],['SCRIPT','approved-script-v3.json','SCRIPT',3,'APPROVED',76000],['AUDIO','scene-01-narration-v2.wav','VOICE_DIALOGUE',2,'ACTIVE',12400000]];
+  for(const [type,name,stage,ver,status,size] of assets as any[]){await db.request().input('pid',sql.UniqueIdentifier,pid).input('type',sql.NVarChar(50),type).input('name',sql.NVarChar(260),name).input('stage',sql.NVarChar(80),stage).input('ver',sql.Int,ver).input('status',sql.NVarChar(30),status).input('size',sql.BigInt,size).input('uid',sql.UniqueIdentifier,uid).query(`IF NOT EXISTS(SELECT 1 FROM dbo.ProjectAssets WHERE ContentProjectId=@pid AND FileName=@name AND VersionNumber=@ver) INSERT dbo.ProjectAssets(ContentProjectId,StageKey,AssetType,FileName,MimeType,FileSizeBytes,VersionNumber,Status,CreatedByUserId) VALUES(@pid,@stage,@type,@name,CASE @type WHEN 'IMAGE' THEN 'image/png' WHEN 'AUDIO' THEN 'audio/wav' ELSE 'application/json' END,@size,@ver,@status,@uid)`)}
+  const approvals=[['Scene package approval','SCENE_MATRIX','APPROVED','Approved for asset generation.'],['Script approval','SCRIPT','APPROVED','Proceed with scene planning.'],['Image batch review','IMAGE_GENERATION','PENDING','Scenes 10–14 require master selections.']];for(const [type,stage,status,comment] of approvals as any[]){await db.request().input('pid',sql.UniqueIdentifier,pid).input('type',sql.NVarChar(80),type).input('stage',sql.NVarChar(80),stage).input('status',sql.NVarChar(30),status).input('comment',sql.NVarChar(2000),comment).input('uid',sql.UniqueIdentifier,uid).query(`IF NOT EXISTS(SELECT 1 FROM dbo.ProjectApprovals WHERE ContentProjectId=@pid AND ApprovalType=@type) INSERT dbo.ProjectApprovals(ContentProjectId,StageKey,ApprovalType,Status,RequestedByUserId,AssignedToUserId,DecisionByUserId,DecisionComment,DecidedAt) VALUES(@pid,@stage,@type,@status,@uid,@uid,CASE WHEN @status='APPROVED' THEN @uid ELSE NULL END,@comment,CASE WHEN @status='APPROVED' THEN SYSUTCDATETIME() ELSE NULL END)`)}
+  const activities=[['AI_GENERATION','IMAGE_GENERATION','Generated image batch','20 variants generated for scenes 10–14 using locked character references.','AI','Image Director'],['WORK_ITEM_CREATED','IMAGE_GENERATION','Created approval work item','Human review requested for the latest image batch.','SYSTEM',null],['APPROVAL','SCENE_MATRIX','Approved scene package','Scene Matrix v1 approved and handed off to Image Generation.','HUMAN',null],['CONTINUITY_CHECK','SCENE_MATRIX','Continuity validation passed','Character, wardrobe and location anchors validated across 28 scenes.','AI','Continuity Guardian']];for(const [activity,stage,title,details,actor,agent] of activities as any[]){await db.request().input('pid',sql.UniqueIdentifier,pid).input('activity',sql.NVarChar(60),activity).input('stage',sql.NVarChar(80),stage).input('title',sql.NVarChar(250),title).input('details',sql.NVarChar(2000),details).input('actor',sql.NVarChar(20),actor).input('agent',sql.NVarChar(150),agent).input('uid',sql.UniqueIdentifier,uid).query(`IF NOT EXISTS(SELECT 1 FROM dbo.ProjectActivities WHERE ContentProjectId=@pid AND Title=@title) INSERT dbo.ProjectActivities(ContentProjectId,ActivityType,StageKey,Title,Details,ActorType,ActorUserId,AgentName) VALUES(@pid,@activity,@stage,@title,@details,@actor,CASE WHEN @actor='HUMAN' THEN @uid ELSE NULL END,@agent)`)}
+  const handoffs=[['STRATEGY_BRIEF','OPPORTUNITY_DISCOVERY','Content Brief v1'],['OPPORTUNITY_DISCOVERY','RESEARCH','Selected Opportunity v1'],['RESEARCH','IDEA_SCORING','Research Pack v2'],['SCENE_MATRIX','IMAGE_GENERATION','Scene Package v1']];for(const [from,to,output] of handoffs as any[]){await db.request().input('pid',sql.UniqueIdentifier,pid).input('from',sql.NVarChar(80),from).input('to',sql.NVarChar(80),to).input('output',sql.NVarChar(80),output).input('uid',sql.UniqueIdentifier,uid).query(`IF NOT EXISTS(SELECT 1 FROM dbo.ProjectHandoffs WHERE ContentProjectId=@pid AND FromStageKey=@from AND ToStageKey=@to) INSERT dbo.ProjectHandoffs(ContentProjectId,FromStageKey,ToStageKey,OutputType,OutputReference,Status,CreatedByUserId,ConsumedAt) VALUES(@pid,@from,@to,@output,@output,'CONSUMED',@uid,SYSUTCDATETIME())`)}
+ }
+ console.log('Module 03 content-project operational bootstrap complete.');
+}finally{await closeDb()}

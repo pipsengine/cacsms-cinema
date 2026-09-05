@@ -25,6 +25,7 @@
     "db:bootstrap": "tsx src/bootstrap-module01.ts",
     "db:bootstrap-module02": "tsx src/bootstrap-module02.ts",
     "db:bootstrap-module03": "tsx src/bootstrap-module03.ts",
+    "db:bootstrap-module04": "tsx src/bootstrap-module04.ts",
     "db:clear-demo": "tsx src/clear-demo-data.ts"
   },
   "dependencies": {
