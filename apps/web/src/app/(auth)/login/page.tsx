@@ -1,4 +1,57 @@
 'use client';
 import Link from 'next/link';
-import { FormEvent, useState } from 'react';
-export default function Login(){const [show,setShow]=useState(false); const [busy,setBusy]=useState(false); const [error,setError]=useState(''); async function submit(e:FormEvent<HTMLFormElement>){e.preventDefault();setBusy(true);setError('');const form=new FormData(e.currentTarget);try{const res=await fetch(`${process.env.NEXT_PUBLIC_API_URL||'http://localhost:4000'}/api/auth/login`,{method:'POST',credentials:'include',headers:{'content-type':'application/json'},body:JSON.stringify({email:String(form.get('email')),password:String(form.get('password'))})});if(!res.ok) throw new Error((await res.json()).error||'Unable to sign in');location.href='/workspace'}catch(err){if(process.env.NEXT_PUBLIC_DEMO_MODE==='true'){location.href='/workspace';return}setError(err instanceof Error?err.message:'Unable to sign in')}finally{setBusy(false)}} return <main className="auth-page"><section className="auth-panel"><div className="auth-brand"><div className="brand-mark large">CC</div><div><strong>Cacsms Cinema</strong><span>Content Operations OS</span></div></div><div className="auth-copy"><div className="eyebrow">SECURE ACCESS</div><h1>Welcome back</h1><p>Sign in to manage your autonomous content production workspace.</p></div><form className="auth-form" onSubmit={submit}><label>Email address<input name="email" type="email" required defaultValue="pipsengine@gmail.com" placeholder="name@company.com"/></label><label>Password<div className="password-field"><input name="password" type={show?'text':'password'} required defaultValue="CacsmsDemo123!"/><button type="button" onClick={()=>setShow(!show)}>{show?'Hide':'Show'}</button></div></label><div className="form-row"><label className="check"><input type="checkbox"/> Keep me signed in</label><Link href="/forgot-password">Forgot password?</Link></div>{error&&<div className="notice red">{error}</div>}<button className="btn primary wide" disabled={busy}>{busy?'Signing in…':'Sign in securely'}</button><div className="auth-divider"><span>Security</span></div><div className="security-note">🔒 Protected by secure session controls, workspace permissions and audit logging.</div></form><footer>© 2026 Cacsms Cinema · Privacy · Security</footer></section><aside className="auth-visual"><div className="visual-grid"/><div className="visual-content"><span className="visual-chip">AUTONOMOUS CONTENT OPERATIONS</span><h2>One controlled system from idea to published cinema.</h2><p>Coordinate human approvals, AI agents, asset generation and release governance without losing visibility.</p><div className="visual-metrics"><div><b>22</b><span>Connected stages</span></div><div><b>100%</b><span>Auditable handoffs</span></div><div><b>24/7</b><span>Agent-ready</span></div></div></div></aside></main>}
+import {FormEvent, useState} from 'react';
+
+export default function Login() {
+  const [show, setShow] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+
+  async function submit(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setBusy(true);
+    setError('');
+    const form = new FormData(e.currentTarget);
+    try {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000'}/api/auth/login`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: {'content-type': 'application/json'},
+        body: JSON.stringify({email: String(form.get('email')), password: String(form.get('password'))})
+      });
+      if (!res.ok) throw new Error((await res.json()).error || 'Unable to sign in');
+      location.href = '/workspace';
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unable to sign in');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <main className="auth-page">
+      <section className="auth-panel">
+        <div className="auth-brand"><div className="brand-mark large">CC</div><div><strong>Cacsms Cinema</strong><span>Content Operations OS</span></div></div>
+        <div className="auth-copy"><div className="eyebrow">SECURE ACCESS</div><h1>Welcome back</h1><p>Sign in to manage your autonomous content production workspace.</p></div>
+        <form className="auth-form" onSubmit={submit}>
+          <label>Email address<input name="email" type="email" required defaultValue="cacsms@cacsms.com" placeholder="name@company.com"/></label>
+          <label>Password<div className="password-field"><input name="password" type={show ? 'text' : 'password'} required defaultValue="P@882w0rd"/><button type="button" onClick={() => setShow(!show)}>{show ? 'Hide' : 'Show'}</button></div></label>
+          <div className="form-row"><label className="check"><input type="checkbox"/> Keep me signed in</label><Link href="/forgot-password">Forgot password?</Link></div>
+          {error && <div className="notice red">{error}</div>}
+          <button className="btn primary wide" disabled={busy}>{busy ? 'Signing in…' : 'Sign in securely'}</button>
+          <div className="auth-divider"><span>Security</span></div>
+          <div className="security-note">🔒 Protected by secure session controls, workspace permissions and audit logging.</div>
+        </form>
+        <footer>© 2026 Cacsms Cinema · Privacy · Security</footer>
+      </section>
+      <aside className="auth-visual">
+        <div className="visual-grid"/>
+        <div className="visual-content">
+          <span className="visual-chip">AUTONOMOUS CONTENT OPERATIONS</span>
+          <h2>One controlled system from idea to published cinema.</h2>
+          <p>Coordinate human approvals, AI agents, asset generation and release governance without losing visibility.</p>
+        </div>
+      </aside>
+    </main>
+  );
+}

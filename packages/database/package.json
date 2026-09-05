@@ -23,7 +23,9 @@
     "db:migrate": "tsx src/migrate.ts",
     "db:seed": "tsx src/seed.ts",
     "db:bootstrap": "tsx src/bootstrap-module01.ts",
-    "db:bootstrap-module02": "tsx src/bootstrap-module02.ts"
+    "db:bootstrap-module02": "tsx src/bootstrap-module02.ts",
+    "db:bootstrap-module03": "tsx src/bootstrap-module03.ts",
+    "db:clear-demo": "tsx src/clear-demo-data.ts"
   },
   "dependencies": {
     "bcryptjs": "^3.0.2",

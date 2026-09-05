@@ -1,5 +1,7 @@
+import {loadRootEnv} from './load-env.js';
 import {closeDb,getDb,sql} from './index.js';
-const email=process.env.BOOTSTRAP_ADMIN_EMAIL||'pipsengine@gmail.com';
+loadRootEnv({override:true});
+const email=process.env.BOOTSTRAP_ADMIN_EMAIL||'cacsms@cacsms.com';
 try{
  const db=await getDb();
  const ids=await db.request().input('email',sql.NVarChar(320),email).query(`SELECT u.UserId,w.WorkspaceId FROM dbo.Users u CROSS JOIN dbo.Workspaces w WHERE u.Email=@email AND w.Slug='cacsms-cinema'`);

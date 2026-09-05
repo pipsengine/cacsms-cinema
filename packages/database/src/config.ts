@@ -16,8 +16,8 @@ export function getSqlConfig(): SqlConfig {
   return {
     server: required('MSSQL_HOST', 'localhost'),
     port: asNumber(process.env.MSSQL_PORT, 1433),
-    database: required('MSSQL_DATABASE', 'AutonomousContentGenerator'),
-    user: required('MSSQL_USER', 'sa'),
+    database: required('MSSQL_DATABASE', 'db_Cacsms-Cinema'),
+    user: required('MSSQL_USER', 'cacsms'),
     password: required('MSSQL_PASSWORD'),
     pool: {
       max: asNumber(process.env.MSSQL_POOL_MAX, 20),

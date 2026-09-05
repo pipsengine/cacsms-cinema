@@ -1,5 +1,5 @@
-IF DB_ID(N'CacsmsCinema') IS NULL
+IF DB_ID(N'db_Cacsms-Cinema') IS NULL
 BEGIN
-    CREATE DATABASE CacsmsCinema;
+    CREATE DATABASE [db_Cacsms-Cinema];
 END;
 GO

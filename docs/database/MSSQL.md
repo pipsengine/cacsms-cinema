@@ -19,8 +19,8 @@ docker compose up -d mssql
 Create the application database once SQL Server is healthy:
 
 ```sql
-IF DB_ID(N'CacsmsCinema') IS NULL
-    CREATE DATABASE CacsmsCinema;
+IF DB_ID(N'db_Cacsms-Cinema') IS NULL
+    CREATE DATABASE [db_Cacsms-Cinema];
 ```
 
 Then run:
@@ -29,8 +29,23 @@ Then run:
 pnpm install
 pnpm --filter @cacsms/database db:migrate
 pnpm --filter @cacsms/database db:seed
+pnpm --filter @cacsms/database db:bootstrap
 pnpm --filter @cacsms/database db:ping
 ```
+
+Application connection settings in `.env` / `.env.example`:
+
+| Variable | Dev default |
+|----------|-------------|
+| `MSSQL_HOST` | `localhost` |
+| `MSSQL_PORT` | `1433` |
+| `MSSQL_DATABASE` | `db_Cacsms-Cinema` |
+| `MSSQL_USER` | `cacsms` |
+| `MSSQL_PASSWORD` | (set locally — never commit secrets) |
+
+Database scripts and the API load the repo-root `.env` automatically via `@cacsms/database`.
+
+The bootstrap admin (`BOOTSTRAP_ADMIN_EMAIL`, default `cacsms@cacsms.com`) is stored with `IsProtected=1`. SQL Server triggers block deleting, deactivating, unprotecting, or changing that account's email.
 
 ## Production rules
 

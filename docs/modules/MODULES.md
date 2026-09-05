@@ -4,7 +4,7 @@
 |---|---|---|
 | 01 | Authentication, Workspace & Access Control | Not Started |
 | 02 | Command Center | Not Started |
-| 03 | Content Projects | Not Started |
+| 03 | Content Projects | Completed |
 | 04 | Strategy & Content Brief | Not Started |
 | 05 | Opportunity & Trend Intelligence | Not Started |
 | 06 | Research & Fact Intelligence | Not Started |

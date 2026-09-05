@@ -1,5 +1,8 @@
 import sql from 'mssql';
+import { loadRootEnv } from './load-env.js';
 import { getSqlConfig } from './config.js';
+
+loadRootEnv();
 
 let pool: sql.ConnectionPool | null = null;
 let connecting: Promise<sql.ConnectionPool> | null = null;
