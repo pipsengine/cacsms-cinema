@@ -9,3 +9,4 @@ console.log('Module 08 API contracts: scene planning register, production-planni
 console.log('Module 09 API contracts: generation projects register, workspace queue, jobs create/update, assets register/decide, stage complete.');
 console.log('Module 10 API contracts: editing projects workspace, timelines save, instructions add, QA checks update, master versions/decide.');
 console.log('Module 11 API contracts: packaging projects workspace, thumbnails variants/decide, metadata/captions/chapters save, platforms, checks update, packaging versions/decision.');
+console.log('Module 12 API contracts: release workspace, approval chain decisions, release controls update, publishing connections, publish jobs create/control, publications register, release-projects list.');

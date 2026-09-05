@@ -1,0 +1,2 @@
+import Link from 'next/link';
+export function PublishingTabs({projectId,active}:{projectId:string;active:string}){const tabs=[['Final Review','review'],['Publishing & Scheduling','publishing'],['Connections','connections'],['Publish Jobs','jobs'],['Release History','history']];return <div className="module-tabs">{tabs.map(([label,key])=><Link key={key} href={`/projects/${projectId}/release/${key}`} className={active===key?'active':''}>{label}</Link>)}</div>}
