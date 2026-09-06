@@ -36,6 +36,7 @@
     "db:bootstrap-module12": "tsx src/bootstrap-module12.ts",
     "db:bootstrap-module13": "tsx src/bootstrap-module13.ts",
     "db:bootstrap-module14": "tsx src/bootstrap-module14.ts",
+    "db:bootstrap-module15": "tsx src/bootstrap-module15.ts",
     "db:clear-demo": "tsx src/clear-demo-data.ts"
   },
   "dependencies": {
